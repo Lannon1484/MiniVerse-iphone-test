@@ -1,5 +1,6 @@
 extends Control
 class_name PerfectStack
+const TouchFeedback = preload("res://scripts/touch_feedback.gd")
 const StackPlayfield = preload("res://scripts/stack_playfield.gd")
 signal finished(game_id: String, score: int, extra: Dictionary)
 var score := 0
@@ -25,8 +26,8 @@ func start_game():
     area=StackPlayfield.new(); area.name="StackPlayfield"; area.size_flags_horizontal=Control.SIZE_EXPAND_FILL; area.size_flags_vertical=Control.SIZE_EXPAND_FILL; area.custom_minimum_size=Vector2(280, 400); area.clip_contents=true; root.add_child(area)
     hint=Label.new(); hint.text="Time your drop. Overhang is trimmed away."; hint.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; hint.add_theme_color_override("font_color",Color("#aeb8df")); root.add_child(hint)
     var buttons:=HBoxContainer.new(); root.add_child(buttons)
-    var drop:=Button.new(); drop.text="DROP BLOCK"; drop.custom_minimum_size.y=68; drop.size_flags_horizontal=Control.SIZE_EXPAND_FILL; drop.add_theme_font_size_override("font_size",18); drop.add_theme_color_override("font_color",Color("#17172b")); drop.add_theme_stylebox_override("normal",_button_style(Color("#fbbf24"))); drop.add_theme_stylebox_override("hover",_button_style(Color("#fde68a"))); drop.pressed.connect(_drop); buttons.add_child(drop)
-    var reset:=Button.new(); reset.text="RESTART"; reset.custom_minimum_size.y=60; reset.add_theme_stylebox_override("normal",_button_style(Color("#252b4c"))); reset.add_theme_stylebox_override("hover",_button_style(Color("#353d66"))); reset.pressed.connect(_restart); buttons.add_child(reset)
+    var drop:=Button.new(); drop.text="DROP BLOCK"; drop.custom_minimum_size.y=68; drop.size_flags_horizontal=Control.SIZE_EXPAND_FILL; drop.add_theme_font_size_override("font_size",18); drop.add_theme_color_override("font_color",Color("#17172b")); drop.add_theme_stylebox_override("normal",_button_style(Color("#fbbf24"))); drop.add_theme_stylebox_override("hover",_button_style(Color("#fde68a"))); drop.pressed.connect(_drop); TouchFeedback.attach(drop); buttons.add_child(drop)
+    var reset:=Button.new(); reset.text="RESTART"; reset.custom_minimum_size.y=60; reset.add_theme_stylebox_override("normal",_button_style(Color("#252b4c"))); reset.add_theme_stylebox_override("hover",_button_style(Color("#353d66"))); reset.pressed.connect(_restart); TouchFeedback.attach(reset); buttons.add_child(reset)
     # Wait for the container layout pass so area.size is valid before
     # calculating the base block position and width.
     _setup_after_layout()

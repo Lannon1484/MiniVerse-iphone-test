@@ -9,6 +9,7 @@ const ACCENT := Color("#a78bfa")
 const CYAN := Color("#67e8f9")
 const SAVE_PATH := "user://miniverse_save.json"
 const GamePreview = preload("res://scripts/game_preview.gd")
+const TouchFeedback = preload("res://scripts/touch_feedback.gd")
 const GAMES := [
     {"id":"fast","title":"Fast Fingers","genre":"REFLEX ARCADE","desc":"Tap targets before time runs out.","color":Color("#f9738f")},
     {"id":"merge","title":"Number Merge","genre":"PUZZLE","desc":"Merge matching tiles to reach bigger numbers.","color":Color("#60a5fa")},
@@ -45,10 +46,19 @@ func _shell():
         glow.color = deco.color
         glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
         add_child(glow)
+    # Keep the interface comfortably inset from the screen edges on phones.
+    # This is a visual safety margin; browser safe-area behavior is also tested
+    # separately on the actual iPhone.
+    var outer := MarginContainer.new()
+    outer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    outer.add_theme_constant_override("margin_left", 16)
+    outer.add_theme_constant_override("margin_right", 16)
+    outer.add_theme_constant_override("margin_top", 12)
+    outer.add_theme_constant_override("margin_bottom", 16)
+    add_child(outer)
     var root := VBoxContainer.new()
-    root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.add_theme_constant_override("separation", 0)
-    add_child(root)
+    outer.add_child(root)
     var header := HBoxContainer.new()
     header.custom_minimum_size.y = 82
     root.add_child(header)
@@ -114,6 +124,7 @@ func _button(text: String, cb: Callable, color := ACCENT, height := 56) -> Butto
     b.add_theme_stylebox_override("focus", _style(color.lightened(0.18)))
     b.add_theme_constant_override("outline_size", 0)
     b.pressed.connect(cb)
+    TouchFeedback.attach(b)
     return b
 
 func _heading(title: String, subtitle := ""):

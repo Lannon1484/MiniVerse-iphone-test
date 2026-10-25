@@ -1,5 +1,6 @@
 extends Control
 class_name NumberMerge
+const TouchFeedback = preload("res://scripts/touch_feedback.gd")
 signal finished(game_id: String, score: int, extra: Dictionary)
 const N := 4
 var board: Array = []
@@ -62,8 +63,8 @@ func _new_board():
     status=Label.new(); status.text="Select two adjacent matching tiles."; status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; status.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; status.add_theme_color_override("font_color",Color("#aeb8df"))
     root.add_child(status)
     var buttons := HBoxContainer.new(); root.add_child(buttons)
-    var reset := Button.new(); reset.text="NEW BOARD"; reset.size_flags_horizontal=Control.SIZE_EXPAND_FILL; reset.pressed.connect(_new_board); buttons.add_child(reset)
-    var help := Button.new(); help.text="HOW TO PLAY"; help.size_flags_horizontal=Control.SIZE_EXPAND_FILL; help.pressed.connect(func(): status.text="Tiles must match and share an edge. Merging doubles the tile.")
+    var reset := Button.new(); reset.text="NEW BOARD"; reset.custom_minimum_size.y=56; reset.size_flags_horizontal=Control.SIZE_EXPAND_FILL; reset.pressed.connect(_new_board); TouchFeedback.attach(reset); buttons.add_child(reset)
+    var help := Button.new(); help.text="HOW TO PLAY"; help.custom_minimum_size.y=56; help.size_flags_horizontal=Control.SIZE_EXPAND_FILL; help.pressed.connect(func(): status.text="Tiles must match and share an edge. Merging doubles the tile."); TouchFeedback.attach(help)
     buttons.add_child(help)
     _refresh()
 
@@ -91,7 +92,7 @@ func _refresh():
             b.add_theme_stylebox_override("normal",_tile_style(tile_color))
             b.add_theme_stylebox_override("hover",_tile_style(tile_color.lightened(0.12)))
             b.add_theme_stylebox_override("pressed",_tile_style(tile_color.darkened(0.08)))
-            b.pressed.connect(_press.bind(x,y)); grid.add_child(b)
+            b.pressed.connect(_press.bind(x,y)); TouchFeedback.attach(b); grid.add_child(b)
             b.pivot_offset = Vector2(32, 38)
             b.scale = Vector2(0.88, 0.88)
             var tile_tween := create_tween()

@@ -29,6 +29,11 @@ Stored locally in Godot's `user://miniverse_save.json` location. Use Settings to
 ## Important limitations
 This is a playable starter build, not a production-ready commercial release. It does not yet include online accounts, cloud saves, server-validated leaderboards, live events, ads, in-app purchases, store-ready export configuration, or real-device QA. The Events screen is a preview only. Local scores are not secure competitive results.
 
+## Mobile touch polish update
+This update adds shared visual feedback when buttons are pressed, including the main hub, Fast Fingers targets, Number Merge tiles/actions, and Perfect Stack controls. The main interface also has consistent side/top/bottom margins to reduce edge-hugging controls on narrow phone screens. Existing game rules are unchanged.
+
+The update is intended for testing in Godot 4.7.2 and Safari web exports, but it has not been run through the Godot editor or verified on a physical device in this packaging environment. After importing, run all three games before exporting a fresh web build.
+
 ## Next steps
 1. Run and test on your Godot 4 version.
 2. Polish mobile layouts, accessibility, and sound.

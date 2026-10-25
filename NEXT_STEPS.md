@@ -6,7 +6,8 @@
 - [x] Three playable mini-games
 - [x] Shared results and progression
 - [ ] Verify against latest stable Godot 4
-- [ ] Improve small-screen layout and accessibility
+- [x] Add shared touch-press feedback and consistent interface margins
+- [ ] Verify small-screen layout and accessibility on physical iPhone sizes
 
 ## Architecture
 - [ ] Common mini-game base interface

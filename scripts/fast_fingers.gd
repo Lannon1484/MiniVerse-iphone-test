@@ -1,6 +1,7 @@
 extends Control
 class_name FastFingers
 const ArcadeField = preload("res://scripts/arcade_field.gd")
+const TouchFeedback = preload("res://scripts/touch_feedback.gd")
 signal finished(game_id: String, score: int, extra: Dictionary)
 var time_left := 20.0
 var score := 0
@@ -89,6 +90,7 @@ func _spawn():
     appear.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
     appear.tween_property(target, "scale", Vector2.ONE, 0.18)
     target.pressed.connect(_hit)
+    TouchFeedback.attach(target)
 
 func _round(c: Color) -> StyleBoxFlat:
     var s := StyleBoxFlat.new()
