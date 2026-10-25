@@ -1,0 +1,61 @@
+extends Control
+
+# Small, scalable neon illustrations used by the MiniVerse game cards.
+var game_id: String = "fast"
+var accent: Color = Color("#f9738f")
+
+func _ready() -> void:
+    mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+func _draw() -> void:
+    var w: float = size.x
+    var h: float = size.y
+    if w < 2.0 or h < 2.0:
+        return
+    draw_rect(Rect2(Vector2.ZERO, size), Color("#11162f"), true)
+    # Soft corner lights and a restrained grid tie the mini-game art together.
+    for i in range(4):
+        var gx: float = w * (0.18 + 0.22 * float(i))
+        draw_line(Vector2(gx, 0), Vector2(gx, h), Color(accent.r, accent.g, accent.b, 0.10), 1.0)
+    for i in range(4):
+        var gy: float = h * (0.18 + 0.22 * float(i))
+        draw_line(Vector2(0, gy), Vector2(w, gy), Color(accent.r, accent.g, accent.b, 0.10), 1.0)
+    var center := Vector2(w * 0.5, h * 0.5)
+    if game_id == "fast":
+        draw_circle(center, minf(w, h) * 0.36, Color(accent.r, accent.g, accent.b, 0.10))
+        draw_arc(center, minf(w, h) * 0.34, 0.0, TAU, 48, accent, 3.0, true)
+        draw_arc(center, minf(w, h) * 0.23, 0.0, TAU, 48, Color("#fef08a"), 2.0, true)
+        draw_circle(center, minf(w, h) * 0.10, Color("#fef08a"))
+        var star: PackedVector2Array = PackedVector2Array()
+        for i in range(10):
+            var angle: float = -PI * 0.5 + float(i) * PI / 5.0
+            var radius: float = minf(w, h) * (0.085 if i % 2 == 0 else 0.04)
+            star.append(center + Vector2(cos(angle), sin(angle)) * radius)
+        draw_colored_polygon(star, Color("#ffffff"))
+    elif game_id == "merge":
+        var cell: float = minf(w, h) * 0.22
+        var gap: float = minf(w, h) * 0.045
+        var start := Vector2((w - (cell * 3.0 + gap * 2.0)) * 0.5, (h - (cell * 3.0 + gap * 2.0)) * 0.5)
+        var tile_colors: Array[Color] = [Color("#dbeafe"), Color("#60a5fa"), Color("#c4b5fd"), Color("#f0abfc"), Color("#fcd34d"), Color("#93c5fd"), Color("#a5b4fc"), Color("#f9a8d4"), Color("#bfdbfe")]
+        var values: Array[String] = ["2", "4", "8", "2", "16", "4", "8", "2", "32"]
+        for i in range(9):
+            var pos := start + Vector2(float(i % 3) * (cell + gap), float(i / 3) * (cell + gap))
+            var tile := Rect2(pos, Vector2(cell, cell))
+            draw_rect(tile.grow(2.0), Color(accent.r, accent.g, accent.b, 0.12), true)
+            draw_rect(tile, tile_colors[i], true)
+            draw_rect(tile, Color("#ffffff", 0.75), false, 1.0)
+            var font := ThemeDB.fallback_font
+            if font:
+                draw_string(font, pos + Vector2(cell * 0.18, cell * 0.68), values[i], HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(10, int(cell * 0.45)), Color("#17172b"))
+    else:
+        var block_h: float = maxf(7.0, h * 0.12)
+        var widths: Array[float] = [w * 0.68, w * 0.60, w * 0.50, w * 0.42]
+        var stack_colors: Array[Color] = [Color("#fbbf24"), Color("#f9738f"), Color("#60a5fa"), Color("#86efac")]
+        for i in range(widths.size()):
+            var bw: float = widths[i]
+            var pos := Vector2((w - bw) * 0.5, h * 0.78 - float(i) * (block_h + 2.0))
+            var block := Rect2(pos, Vector2(bw, block_h))
+            draw_rect(block.grow(3.0), Color(stack_colors[i].r, stack_colors[i].g, stack_colors[i].b, 0.12), true)
+            draw_rect(block, stack_colors[i], true)
+            draw_rect(Rect2(pos, Vector2(bw, 2.0)), Color("#ffffff", 0.75), true)
+    draw_rect(Rect2(Vector2.ZERO, size), Color(accent.r, accent.g, accent.b, 0.38), false, 2.0)
