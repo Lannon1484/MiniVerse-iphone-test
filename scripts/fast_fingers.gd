@@ -78,10 +78,11 @@ func _spawn():
     # Large hit target for comfortable one-handed tapping on phones.
     target.custom_minimum_size = Vector2(88,88)
     target.add_theme_font_size_override("font_size",32)
-    target.add_theme_color_override("font_color", Color("#17172b"))
+    target.add_theme_color_override("font_color", Color("#ffffff"))
     target.add_theme_stylebox_override("hover", _round(Color("#ffffff")))
     target.add_theme_stylebox_override("pressed", _round(Color("#e0e7ff")))
-    target.add_theme_stylebox_override("normal",_round([Color("#f9738f"),Color("#fbbf24"),Color("#60a5fa"),Color("#86efac")][rng.randi_range(0,3)]))
+    var target_color: Color = [Color("#06b6d4"), Color("#ec4899"), Color("#8b5cf6"), Color("#22c55e")][rng.randi_range(0,3)]
+    target.add_theme_stylebox_override("normal", _target_style(target_color))
     area.add_child(target)
     target.position = Vector2(rng.randf_range(0,maxf(0,area.size.x-88)),rng.randf_range(0,maxf(0,area.size.y-88)))
     target.pivot_offset = Vector2(44, 44)
@@ -96,6 +97,15 @@ func _round(c: Color) -> StyleBoxFlat:
     var s := StyleBoxFlat.new()
     s.bg_color = c
     s.corner_radius_top_left=40; s.corner_radius_top_right=40; s.corner_radius_bottom_left=40; s.corner_radius_bottom_right=40
+    return s
+
+func _target_style(c: Color) -> StyleBoxFlat:
+    var s := _round(c)
+    s.border_width_left = 3; s.border_width_right = 3; s.border_width_top = 3; s.border_width_bottom = 3
+    s.border_color = Color("#ffffff", 0.9)
+    s.shadow_color = Color(c.r, c.g, c.b, 0.55)
+    s.shadow_size = 12
+    s.shadow_offset = Vector2(0, 3)
     return s
 
 func _hit():

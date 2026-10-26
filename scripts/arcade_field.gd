@@ -1,24 +1,26 @@
 extends Control
 
-var accent: Color = Color("#a78bfa")
+var accent: Color = Color("#22d3ee")
 
 func _draw() -> void:
     var w := size.x
     var h := size.y
     if w <= 1.0 or h <= 1.0:
         return
-    draw_rect(Rect2(Vector2.ZERO, size), Color("#10152d"), true)
-    var grid_color := Color(accent.r, accent.g, accent.b, 0.12)
-    var step := 36.0
-    # Keep the background grid stationary to avoid distracting flicker/motion.
-    var offset := 0.0
-    for x in range(-1, int(w / step) + 2):
-        var px := float(x) * step + offset
-        draw_line(Vector2(px, 0), Vector2(px, h), grid_color, 1.0)
-    for y in range(-1, int(h / step) + 2):
-        var py := float(y) * step + offset
-        draw_line(Vector2(0, py), Vector2(w, py), grid_color, 1.0)
-    for i in range(8):
-        var px := fposmod(float(i) * 97.0 + 31.0, w)
-        var py := fposmod(float(i) * 139.0 + 47.0, h)
-        draw_circle(Vector2(px, py), 2.0, Color(accent.r, accent.g, accent.b, 0.45))
+    # Deep jewel-toned arcade sky, with soft ambient light pools.
+    draw_rect(Rect2(Vector2.ZERO, size), Color("#07132f"), true)
+    draw_circle(Vector2(w * 0.18, h * 0.18), minf(w, h) * 0.42, Color("#164e9a", 0.22))
+    draw_circle(Vector2(w * 0.82, h * 0.52), minf(w, h) * 0.36, Color("#86198f", 0.16))
+    draw_circle(Vector2(w * 0.50, h * 0.88), minf(w, h) * 0.30, Color("#0891b2", 0.12))
+    # Small, fixed stars keep the background lively without distracting motion.
+    for i in range(34):
+        var px := fposmod(float(i) * 73.0 + 19.0, w)
+        var py := fposmod(float(i) * 127.0 + 31.0, h)
+        var radius := 1.0 if i % 4 != 0 else 2.0
+        draw_circle(Vector2(px, py), radius, Color("#dbeafe", 0.42 if i % 3 == 0 else 0.22))
+    for i in range(7):
+        var px := fposmod(float(i) * 109.0 + 45.0, w)
+        var py := fposmod(float(i) * 83.0 + 70.0, h)
+        var c: Color = [Color("#22d3ee"), Color("#f472b6"), Color("#a78bfa")][i % 3]
+        draw_line(Vector2(px - 4, py), Vector2(px + 4, py), Color(c, 0.65), 1.5)
+        draw_line(Vector2(px, py - 4), Vector2(px, py + 4), Color(c, 0.65), 1.5)

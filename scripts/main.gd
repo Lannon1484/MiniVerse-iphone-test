@@ -1,6 +1,6 @@
 extends Control
 
-const BG := Color("#0e1024")
+const BG := Color("#080d27")
 const PANEL := Color("#191d3b")
 const PANEL2 := Color("#252b4c")
 const TEXT := Color("#f5f7ff")
@@ -10,6 +10,7 @@ const CYAN := Color("#67e8f9")
 const SAVE_PATH := "user://miniverse_save.json"
 const GamePreview = preload("res://scripts/game_preview.gd")
 const TouchFeedback = preload("res://scripts/touch_feedback.gd")
+const HomeHero = preload("res://scripts/home_hero.gd")
 const GAMES := [
     {"id":"fast","title":"Fast Fingers","genre":"REFLEX ARCADE","desc":"Tap targets before time runs out.","color":Color("#f9738f")},
     {"id":"merge","title":"Number Merge","genre":"PUZZLE","desc":"Merge matching tiles to reach bigger numbers.","color":Color("#60a5fa")},
@@ -67,7 +68,10 @@ func _shell():
     header.add_child(brand)
     var logo := Label.new()
     logo.text = "MINIVERSE"
-    logo.add_theme_font_size_override("font_size", 28)
+    logo.add_theme_font_size_override("font_size", 30)
+    logo.add_theme_color_override("font_shadow_color", Color("#7c3aed"))
+    logo.add_theme_constant_override("shadow_offset_x", 2)
+    logo.add_theme_constant_override("shadow_offset_y", 3)
     logo.add_theme_color_override("font_color", TEXT)
     brand.add_child(logo)
     var subtitle := Label.new()
@@ -163,21 +167,48 @@ func _card(title: String, body: String):
 
 func home():
     _shell()
-    _heading("WELCOME BACK, PLAYER", "YOUR NEXT HIGH SCORE IS ONE ROUND AWAY.")
-    _card("✦  YOUR ARCADE ADVENTURE", "PLAY QUICK. LEVEL UP. CHASE THE PERFECT RUN.\nEarn coins, build XP, and beat your personal bests.")
-    content.add_child(_button("▶  PLAY A RANDOM GAME", _random_game, Color("#fbbf24"), 62))
-    _heading("Featured games", "Choose your next challenge")
+    # Mobile-first welcome panel with custom procedural fantasy artwork.
+    var hero := PanelContainer.new()
+    hero.add_theme_stylebox_override("panel", _style(Color("#171849"), 22))
+    content.add_child(hero)
+    var hero_box := VBoxContainer.new()
+    hero_box.add_theme_constant_override("separation", 0)
+    hero.add_child(hero_box)
+    var art := HomeHero.new()
+    art.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    hero_box.add_child(art)
+    var welcome := VBoxContainer.new()
+    welcome.add_theme_constant_override("separation", 5)
+    welcome.add_theme_constant_override("margin_left", 12)
+    welcome.add_theme_constant_override("margin_right", 12)
+    welcome.add_theme_constant_override("margin_top", 12)
+    welcome.add_theme_constant_override("margin_bottom", 14)
+    hero_box.add_child(welcome)
+    var title := Label.new()
+    title.text = "SMALL GAMES. BIG FUN."
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title.add_theme_font_size_override("font_size", 22)
+    title.add_theme_color_override("font_color", Color("#fff2a8"))
+    welcome.add_child(title)
+    var subtitle := Label.new()
+    subtitle.text = "Pick a game, beat your best, earn rewards!"
+    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    subtitle.add_theme_color_override("font_color", Color("#e1e7ff"))
+    welcome.add_child(subtitle)
+    content.add_child(_button("▶  PLAY A RANDOM GAME", _random_game, Color("#36e58a"), 60))
+    _heading("Pick your next adventure", "Three quick games. Endless replay.")
     for g in GAMES:
         content.add_child(_game_card(g))
-    content.add_child(_button("🎮  GAME LIBRARY", library, PANEL2))
-    content.add_child(_button("🏆  CHALLENGES & EVENTS", events, PANEL2))
-    content.add_child(_button("⚙  SETTINGS", settings, PANEL2))
-    _card("PLAYER PROGRESS", "Level %d  ·  %d XP  ·  %d coins  ·  %d personal records" % [level, xp, coins, best_scores.size()])
+    content.add_child(_button("▦  GAME LIBRARY", library, Color("#344a9b")))
+    content.add_child(_button("🏆  CHALLENGES & EVENTS", events, Color("#344a9b")))
+    content.add_child(_button("⚙  SETTINGS", settings, Color("#344a9b")))
+    _card("YOUR PROGRESS", "Level %d  ·  %d XP  ·  %d coins  ·  %d personal records" % [level, xp, coins, best_scores.size()])
 
 func _game_card(g: Dictionary) -> PanelContainer:
     var card := PanelContainer.new()
-    card.custom_minimum_size.y = 112
-    card.add_theme_stylebox_override("panel", _style(PANEL, 18))
+    card.custom_minimum_size.y = 126
+    card.add_theme_stylebox_override("panel", _style(Color("#18234c"), 20))
     var row := HBoxContainer.new()
     row.add_theme_constant_override("separation", 12)
     card.add_child(row)
@@ -185,7 +216,7 @@ func _game_card(g: Dictionary) -> PanelContainer:
     var preview := GamePreview.new()
     preview.game_id = g.id
     preview.accent = g.color
-    preview.custom_minimum_size = Vector2(88, 88)
+    preview.custom_minimum_size = Vector2(92, 98)
     preview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     row.add_child(preview)
 
@@ -217,7 +248,7 @@ func _game_card(g: Dictionary) -> PanelContainer:
     detail.add_child(best)
 
     var play := _button("PLAY", func(): launch(g.id), g.color, 44)
-    play.custom_minimum_size.x = 78
+    play.custom_minimum_size.x = 74
     play.size_flags_horizontal = Control.SIZE_SHRINK_END
     play.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     row.add_child(play)
