@@ -1,6 +1,5 @@
 extends Control
 class_name NumberMerge
-const TouchFeedback = preload("res://scripts/touch_feedback.gd")
 signal finished(game_id: String, score: int, extra: Dictionary)
 const N := 4
 var board: Array = []
@@ -63,8 +62,8 @@ func _new_board():
     status=Label.new(); status.text="Select two adjacent matching tiles."; status.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; status.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; status.add_theme_color_override("font_color",Color("#aeb8df"))
     root.add_child(status)
     var buttons := HBoxContainer.new(); root.add_child(buttons)
-    var reset := Button.new(); reset.text="NEW BOARD"; reset.custom_minimum_size.y=56; reset.size_flags_horizontal=Control.SIZE_EXPAND_FILL; reset.pressed.connect(_new_board); TouchFeedback.attach(reset); buttons.add_child(reset)
-    var help := Button.new(); help.text="HOW TO PLAY"; help.custom_minimum_size.y=56; help.size_flags_horizontal=Control.SIZE_EXPAND_FILL; help.pressed.connect(func(): status.text="Tiles must match and share an edge. Merging doubles the tile."); TouchFeedback.attach(help)
+    var reset := Button.new(); reset.text="NEW BOARD"; reset.size_flags_horizontal=Control.SIZE_EXPAND_FILL; reset.pressed.connect(_new_board); buttons.add_child(reset)
+    var help := Button.new(); help.text="HOW TO PLAY"; help.size_flags_horizontal=Control.SIZE_EXPAND_FILL; help.pressed.connect(func(): status.text="Tiles must match and share an edge. Merging doubles the tile.")
     buttons.add_child(help)
     _refresh()
 
@@ -83,17 +82,17 @@ func _refresh():
     for y in range(N):
         for x in range(N):
             var v: int=board[y][x]
-            var b:=Button.new(); b.text="" if v==0 else str(v); b.custom_minimum_size=Vector2(64,76)
+            var b:=Button.new(); b.text="" if v==0 else str(v); b.custom_minimum_size=Vector2(50,70)
             b.size_flags_horizontal=Control.SIZE_EXPAND_FILL; b.size_flags_vertical=Control.SIZE_EXPAND_FILL
             b.add_theme_font_size_override("font_size",22)
-            b.add_theme_color_override("font_color",Color("#ffffff"))
+            b.add_theme_color_override("font_color",Color("#17172b"))
             var tile_color := _tile_color(v)
             if selected == Vector2i(x,y): tile_color = Color("#fbbf24")
             b.add_theme_stylebox_override("normal",_tile_style(tile_color))
             b.add_theme_stylebox_override("hover",_tile_style(tile_color.lightened(0.12)))
             b.add_theme_stylebox_override("pressed",_tile_style(tile_color.darkened(0.08)))
-            b.pressed.connect(_press.bind(x,y)); TouchFeedback.attach(b); grid.add_child(b)
-            b.pivot_offset = Vector2(32, 38)
+            b.pressed.connect(_press.bind(x,y)); grid.add_child(b)
+            b.pivot_offset = Vector2(35, 35)
             b.scale = Vector2(0.88, 0.88)
             var tile_tween := create_tween()
             tile_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -102,24 +101,23 @@ func _refresh():
 
 func _tile_color(v: int) -> Color:
     match v:
-        0: return Color("#17294b")
-        2: return Color("#0ea5e9")
-        4: return Color("#22c55e")
-        8: return Color("#f59e0b")
-        16: return Color("#ec4899")
-        32: return Color("#8b5cf6")
-        64: return Color("#06b6d4")
-        128: return Color("#f43f5e")
-        256: return Color("#a3e635")
-        512: return Color("#d946ef")
-        1024: return Color("#fb923c")
-        _: return Color("#facc15")
+        0: return Color("#292e4c")
+        2: return Color("#dbeafe")
+        4: return Color("#bfdbfe")
+        8: return Color("#93c5fd")
+        16: return Color("#60a5fa")
+        32: return Color("#a5b4fc")
+        64: return Color("#c4b5fd")
+        128: return Color("#f0abfc")
+        256: return Color("#f9a8d4")
+        512: return Color("#fda4af")
+        1024: return Color("#fdba74")
+        _: return Color("#fcd34d")
 
 func _tile_style(c: Color) -> StyleBoxFlat:
     var s:=StyleBoxFlat.new(); s.bg_color=c; s.corner_radius_top_left=12; s.corner_radius_top_right=12; s.corner_radius_bottom_left=12; s.corner_radius_bottom_right=12
     s.content_margin_left=5; s.content_margin_right=5; s.content_margin_top=5; s.content_margin_bottom=5
-    s.border_width_left=1; s.border_width_right=1; s.border_width_top=1; s.border_width_bottom=1; s.border_color=Color("#ffffff",0.48)
-    s.shadow_color=Color("#020617",0.45); s.shadow_size=5; s.shadow_offset=Vector2(0,3)
+    s.border_width_left=1; s.border_width_right=1; s.border_width_top=1; s.border_width_bottom=1; s.border_color=Color("#ffffff",0.18)
     return s
 
 func _press(x: int,y: int):

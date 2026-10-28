@@ -1,6 +1,6 @@
 extends Control
 
-const BG := Color("#080d27")
+const BG := Color("#0e1024")
 const PANEL := Color("#191d3b")
 const PANEL2 := Color("#252b4c")
 const TEXT := Color("#f5f7ff")
@@ -8,9 +8,6 @@ const MUTED := Color("#a9b1d0")
 const ACCENT := Color("#a78bfa")
 const CYAN := Color("#67e8f9")
 const SAVE_PATH := "user://miniverse_save.json"
-const GamePreview = preload("res://scripts/game_preview.gd")
-const TouchFeedback = preload("res://scripts/touch_feedback.gd")
-const HomeHero = preload("res://scripts/home_hero.gd")
 const GAMES := [
     {"id":"fast","title":"Fast Fingers","genre":"REFLEX ARCADE","desc":"Tap targets before time runs out.","color":Color("#f9738f")},
     {"id":"merge","title":"Number Merge","genre":"PUZZLE","desc":"Merge matching tiles to reach bigger numbers.","color":Color("#60a5fa")},
@@ -47,19 +44,10 @@ func _shell():
         glow.color = deco.color
         glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
         add_child(glow)
-    # Keep the interface comfortably inset from the screen edges on phones.
-    # This is a visual safety margin; browser safe-area behavior is also tested
-    # separately on the actual iPhone.
-    var outer := MarginContainer.new()
-    outer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    outer.add_theme_constant_override("margin_left", 16)
-    outer.add_theme_constant_override("margin_right", 16)
-    outer.add_theme_constant_override("margin_top", 12)
-    outer.add_theme_constant_override("margin_bottom", 16)
-    add_child(outer)
     var root := VBoxContainer.new()
+    root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.add_theme_constant_override("separation", 0)
-    outer.add_child(root)
+    add_child(root)
     var header := HBoxContainer.new()
     header.custom_minimum_size.y = 82
     root.add_child(header)
@@ -68,10 +56,7 @@ func _shell():
     header.add_child(brand)
     var logo := Label.new()
     logo.text = "MINIVERSE"
-    logo.add_theme_font_size_override("font_size", 30)
-    logo.add_theme_color_override("font_shadow_color", Color("#7c3aed"))
-    logo.add_theme_constant_override("shadow_offset_x", 2)
-    logo.add_theme_constant_override("shadow_offset_y", 3)
+    logo.add_theme_font_size_override("font_size", 28)
     logo.add_theme_color_override("font_color", TEXT)
     brand.add_child(logo)
     var subtitle := Label.new()
@@ -117,8 +102,7 @@ func _style(color: Color, radius := 14) -> StyleBoxFlat:
 func _button(text: String, cb: Callable, color := ACCENT, height := 56) -> Button:
     var b := Button.new()
     b.text = text
-    # Keep every interactive button comfortably tappable on phones.
-    b.custom_minimum_size.y = maxi(height, 52)
+    b.custom_minimum_size.y = height
     b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     b.add_theme_font_size_override("font_size", 17)
     b.add_theme_color_override("font_color", Color("#17172b") if color == ACCENT or color == Color("#fbbf24") else TEXT)
@@ -128,7 +112,6 @@ func _button(text: String, cb: Callable, color := ACCENT, height := 56) -> Butto
     b.add_theme_stylebox_override("focus", _style(color.lightened(0.18)))
     b.add_theme_constant_override("outline_size", 0)
     b.pressed.connect(cb)
-    TouchFeedback.attach(b)
     return b
 
 func _heading(title: String, subtitle := ""):
@@ -167,98 +150,61 @@ func _card(title: String, body: String):
 
 func home():
     _shell()
-    # Mobile-first welcome panel with custom procedural fantasy artwork.
-    var hero := PanelContainer.new()
-    hero.add_theme_stylebox_override("panel", _style(Color("#171849"), 22))
-    content.add_child(hero)
-    var hero_box := VBoxContainer.new()
-    hero_box.add_theme_constant_override("separation", 0)
-    hero.add_child(hero_box)
-    var art := HomeHero.new()
-    art.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    hero_box.add_child(art)
-    var welcome := VBoxContainer.new()
-    welcome.add_theme_constant_override("separation", 5)
-    welcome.add_theme_constant_override("margin_left", 12)
-    welcome.add_theme_constant_override("margin_right", 12)
-    welcome.add_theme_constant_override("margin_top", 12)
-    welcome.add_theme_constant_override("margin_bottom", 14)
-    hero_box.add_child(welcome)
-    var title := Label.new()
-    title.text = "SMALL GAMES. BIG FUN."
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size", 22)
-    title.add_theme_color_override("font_color", Color("#fff2a8"))
-    welcome.add_child(title)
-    var subtitle := Label.new()
-    subtitle.text = "Pick a game, beat your best, earn rewards!"
-    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    subtitle.add_theme_color_override("font_color", Color("#e1e7ff"))
-    welcome.add_child(subtitle)
-    content.add_child(_button("▶  PLAY A RANDOM GAME", _random_game, Color("#36e58a"), 60))
-    _heading("Pick your next adventure", "Three quick games. Endless replay.")
+    _heading("WELCOME BACK, PLAYER", "YOUR NEXT HIGH SCORE IS ONE ROUND AWAY.")
+    _card("✦  YOUR ARCADE ADVENTURE", "PLAY QUICK. LEVEL UP. CHASE THE PERFECT RUN.\nEarn coins, build XP, and beat your personal bests.")
+    content.add_child(_button("▶  PLAY A RANDOM GAME", _random_game, Color("#fbbf24"), 62))
+    _heading("Featured games", "Choose your next challenge")
     for g in GAMES:
-        content.add_child(_game_card(g))
-    content.add_child(_button("▦  GAME LIBRARY", library, Color("#344a9b")))
-    content.add_child(_button("🏆  CHALLENGES & EVENTS", events, Color("#344a9b")))
-    content.add_child(_button("⚙  SETTINGS", settings, Color("#344a9b")))
-    _card("YOUR PROGRESS", "Level %d  ·  %d XP  ·  %d coins  ·  %d personal records" % [level, xp, coins, best_scores.size()])
-
-func _game_card(g: Dictionary) -> PanelContainer:
-    var card := PanelContainer.new()
-    card.custom_minimum_size.y = 126
-    card.add_theme_stylebox_override("panel", _style(Color("#18234c"), 20))
-    var row := HBoxContainer.new()
-    row.add_theme_constant_override("separation", 12)
-    card.add_child(row)
-
-    var preview := GamePreview.new()
-    preview.game_id = g.id
-    preview.accent = g.color
-    preview.custom_minimum_size = Vector2(92, 98)
-    preview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-    row.add_child(preview)
-
-    var detail := VBoxContainer.new()
-    detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    detail.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-    detail.add_theme_constant_override("separation", 3)
-    row.add_child(detail)
-    var name := Label.new()
-    name.text = g.title
-    name.add_theme_font_size_override("font_size", 17)
-    name.add_theme_color_override("font_color", TEXT)
-    detail.add_child(name)
-    var genre := Label.new()
-    genre.text = g.genre
-    genre.add_theme_font_size_override("font_size", 10)
-    genre.add_theme_color_override("font_color", g.color)
-    detail.add_child(genre)
-    var desc := Label.new()
-    desc.text = g.desc
-    desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    desc.add_theme_font_size_override("font_size", 11)
-    desc.add_theme_color_override("font_color", MUTED)
-    detail.add_child(desc)
-    var best := Label.new()
-    best.text = "BEST  %d" % int(best_scores.get(g.id, 0))
-    best.add_theme_font_size_override("font_size", 10)
-    best.add_theme_color_override("font_color", Color("#fcd34d"))
-    detail.add_child(best)
-
-    var play := _button("PLAY", func(): launch(g.id), g.color, 44)
-    play.custom_minimum_size.x = 74
-    play.size_flags_horizontal = Control.SIZE_SHRINK_END
-    play.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-    row.add_child(play)
-    return card
+        var card := PanelContainer.new()
+        card.add_theme_stylebox_override("panel", _style(PANEL, 18))
+        content.add_child(card)
+        var row := HBoxContainer.new()
+        row.add_theme_constant_override("separation", 12)
+        var p := PanelContainer.new()
+        p.custom_minimum_size = Vector2(72, 70)
+        p.add_theme_stylebox_override("panel", _style(g.color, 16))
+        row.add_child(p)
+        var icon := Label.new()
+        icon.text = {"fast":"✦","merge":"▦","stack":"▤"}[g.id]
+        icon.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        icon.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+        icon.add_theme_font_size_override("font_size", 30)
+        icon.add_theme_color_override("font_color", Color("#17172b"))
+        p.add_child(icon)
+        var detail := VBoxContainer.new()
+        detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        row.add_child(detail)
+        var name := Label.new()
+        name.text = g.title
+        name.add_theme_font_size_override("font_size", 18)
+        name.add_theme_color_override("font_color", TEXT)
+        detail.add_child(name)
+        var genre := Label.new()
+        genre.text = g.genre
+        genre.add_theme_font_size_override("font_size", 10)
+        genre.add_theme_color_override("font_color", g.color)
+        detail.add_child(genre)
+        var desc := Label.new()
+        desc.text = g.desc
+        desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        desc.add_theme_font_size_override("font_size", 12)
+        desc.add_theme_color_override("font_color", MUTED)
+        detail.add_child(desc)
+        var b := _button("PLAY", func(): launch(g.id), g.color, 42)
+        b.custom_minimum_size.x = 78
+        b.size_flags_horizontal = Control.SIZE_SHRINK_END
+        row.add_child(b)
+        card.add_child(row)
+    content.add_child(_button("🎮  GAME LIBRARY", library, PANEL2))
+    content.add_child(_button("🏆  CHALLENGES & EVENTS", events, PANEL2))
+    content.add_child(_button("⚙  SETTINGS", settings, PANEL2))
+    _card("PLAYER PROGRESS", "Level %d  ·  %d XP  ·  %d coins  ·  %d personal records" % [level, xp, coins, best_scores.size()])
 
 func library():
     _shell()
     _heading("Game Library", "Choose a game and start playing.")
     for g in GAMES:
-        content.add_child(_game_card(g))
+        content.add_child(_button("%s  ·  %s" % [g.title, g.genre], func(): launch(g.id), g.color))
     content.add_child(_button("← BACK TO HOME", home, PANEL2))
 
 func events():

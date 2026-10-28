@@ -1,7 +1,6 @@
 extends Control
 class_name FastFingers
 const ArcadeField = preload("res://scripts/arcade_field.gd")
-const TouchFeedback = preload("res://scripts/touch_feedback.gd")
 signal finished(game_id: String, score: int, extra: Dictionary)
 var time_left := 20.0
 var score := 0
@@ -42,7 +41,7 @@ func start_game():
     area.accent = Color("#f9738f")
     area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     area.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    area.custom_minimum_size.y = 480
+    area.custom_minimum_size.y = 450
     area.clip_contents = true
     root.add_child(area)
     var hint := Label.new()
@@ -63,6 +62,7 @@ func _stat(t: String) -> Label:
     return l
 
 func _process(delta):
+    if is_instance_valid(area): area.queue_redraw()
     if not running: return
     time_left -= delta
     timer_label.text = "TIME %02d" % ceili(maxf(time_left,0))
@@ -75,37 +75,25 @@ func _spawn():
     if is_instance_valid(target): target.queue_free()
     target = Button.new()
     target.text = "✦"
-    # Large hit target for comfortable one-handed tapping on phones.
-    target.custom_minimum_size = Vector2(88,88)
+    target.custom_minimum_size = Vector2(78,78)
     target.add_theme_font_size_override("font_size",32)
-    target.add_theme_color_override("font_color", Color("#ffffff"))
+    target.add_theme_color_override("font_color", Color("#17172b"))
     target.add_theme_stylebox_override("hover", _round(Color("#ffffff")))
     target.add_theme_stylebox_override("pressed", _round(Color("#e0e7ff")))
-    var target_color: Color = [Color("#06b6d4"), Color("#ec4899"), Color("#8b5cf6"), Color("#22c55e")][rng.randi_range(0,3)]
-    target.add_theme_stylebox_override("normal", _target_style(target_color))
+    target.add_theme_stylebox_override("normal",_round([Color("#f9738f"),Color("#fbbf24"),Color("#60a5fa"),Color("#86efac")][rng.randi_range(0,3)]))
     area.add_child(target)
-    target.position = Vector2(rng.randf_range(0,maxf(0,area.size.x-88)),rng.randf_range(0,maxf(0,area.size.y-88)))
-    target.pivot_offset = Vector2(44, 44)
+    target.position = Vector2(rng.randf_range(0,maxf(0,area.size.x-78)),rng.randf_range(0,maxf(0,area.size.y-78)))
+    target.pivot_offset = Vector2(39, 39)
     target.scale = Vector2(0.55, 0.55)
     var appear := create_tween()
     appear.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
     appear.tween_property(target, "scale", Vector2.ONE, 0.18)
     target.pressed.connect(_hit)
-    TouchFeedback.attach(target)
 
 func _round(c: Color) -> StyleBoxFlat:
     var s := StyleBoxFlat.new()
     s.bg_color = c
     s.corner_radius_top_left=40; s.corner_radius_top_right=40; s.corner_radius_bottom_left=40; s.corner_radius_bottom_right=40
-    return s
-
-func _target_style(c: Color) -> StyleBoxFlat:
-    var s := _round(c)
-    s.border_width_left = 3; s.border_width_right = 3; s.border_width_top = 3; s.border_width_bottom = 3
-    s.border_color = Color("#ffffff", 0.9)
-    s.shadow_color = Color(c.r, c.g, c.b, 0.55)
-    s.shadow_size = 12
-    s.shadow_offset = Vector2(0, 3)
     return s
 
 func _hit():
