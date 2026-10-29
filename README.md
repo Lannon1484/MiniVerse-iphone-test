@@ -37,3 +37,16 @@ This is a playable starter build, not a production-ready commercial release. It 
 5. Use macOS/Xcode for iOS export and physical-device testing.
 6. Add backend authentication, score validation, leaderboards, and server-scheduled events.
 7. Add more games after the shared framework is stable.
+
+
+## New in this update
+- Added Memory Match, a touch-friendly 4×4 matching-pairs mini-game.
+- Added a daily featured game that rotates locally by calendar day.
+- Existing games and home-screen artwork are retained.
+
+
+## Recent-games and icon update
+- Home screen now shows only the three most recently launched games.
+- Recent game history is saved locally and restored between sessions.
+- Full game list remains available in Game Library.
+- Memory Match now has its own card illustration, distinct from Perfect Stack.

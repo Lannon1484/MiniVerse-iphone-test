@@ -11,10 +11,12 @@ const SAVE_PATH := "user://miniverse_save.json"
 const GamePreview = preload("res://scripts/game_preview.gd")
 const TouchFeedback = preload("res://scripts/touch_feedback.gd")
 const HomeHero = preload("res://scripts/home_hero.gd")
+const MemoryMatch = preload("res://scripts/memory_match.gd")
 const GAMES := [
     {"id":"fast","title":"Fast Fingers","genre":"REFLEX ARCADE","desc":"Tap targets before time runs out.","color":Color("#f9738f")},
     {"id":"merge","title":"Number Merge","genre":"PUZZLE","desc":"Merge matching tiles to reach bigger numbers.","color":Color("#60a5fa")},
-    {"id":"stack","title":"Perfect Stack","genre":"TIMING","desc":"Drop moving blocks and build a tower.","color":Color("#fbbf24")}
+    {"id":"stack","title":"Perfect Stack","genre":"TIMING","desc":"Drop moving blocks and build a tower.","color":Color("#fbbf24")},
+    {"id":"memory","title":"Memory Match","genre":"BRAIN TRAINER","desc":"Flip cards and find all matching pairs.","color":Color("#34d399")}
 ]
 
 var content: VBoxContainer
@@ -22,6 +24,7 @@ var coins := 0
 var xp := 0
 var level := 1
 var best_scores: Dictionary = {}
+var recent_games: Array[String] = []
 var game_id := ""
 var game_root: Control
 var rng := RandomNumberGenerator.new()
@@ -197,10 +200,17 @@ func home():
     subtitle.add_theme_color_override("font_color", Color("#e1e7ff"))
     welcome.add_child(subtitle)
     content.add_child(_button("▶  PLAY A RANDOM GAME", _random_game, Color("#36e58a"), 60))
-    _heading("Pick your next adventure", "Three quick games. Endless replay.")
-    for g in GAMES:
-        content.add_child(_game_card(g))
-    content.add_child(_button("▦  GAME LIBRARY", library, Color("#344a9b")))
+    content.add_child(_button("☀  PLAY TODAY'S CHALLENGE", _daily_challenge, Color("#fbbf24"), 54))
+    _heading("Recently Played", "Your last three games, ready to jump back into.")
+    var shown := 0
+    for recent_id in recent_games:
+        var recent_game := _game_data(recent_id)
+        if not recent_game.is_empty() and shown < 3:
+            content.add_child(_game_card(recent_game))
+            shown += 1
+    if shown == 0:
+        _card("YOUR ADVENTURE STARTS HERE", "Play a game from the library and your three most recently played games will appear here.")
+    content.add_child(_button("▦  OPEN GAME LIBRARY", library, Color("#344a9b")))
     content.add_child(_button("🏆  CHALLENGES & EVENTS", events, Color("#344a9b")))
     content.add_child(_button("⚙  SETTINGS", settings, Color("#344a9b")))
     _card("YOUR PROGRESS", "Level %d  ·  %d XP  ·  %d coins  ·  %d personal records" % [level, xp, coins, best_scores.size()])
@@ -264,7 +274,11 @@ func library():
 func events():
     _shell()
     _heading("Challenges & Events", "Event previews for the growing MiniVerse.")
-    _card("☀ DAILY DASH", "A featured challenge that refreshes daily. Live server-scheduled events are not connected in this starter.")
+    var day_key := int(Time.get_unix_time_from_system() / 86400.0)
+    var challenge_ids := ["fast", "merge", "stack", "memory"]
+    var challenge_id: String = challenge_ids[day_key % challenge_ids.size()]
+    _card("☀ DAILY DASH", "Today's featured game: %s. Finish a round to earn coins and XP." % _game_name(challenge_id))
+    content.add_child(_button("▶  PLAY DAILY CHALLENGE", _daily_challenge, Color("#fbbf24")))
     _card("🏆 MINIVERSE CUP", "Weekly score competitions will rotate between mini-games after an online backend is added.")
     _card("✦ MINIVERSE FESTIVAL", "Seasonal themes, cosmetic rewards, and special games are planned for future versions.")
     content.add_child(_button("← BACK TO HOME", home, PANEL2))
@@ -289,10 +303,16 @@ func _random_game():
 
 func launch(id: String):
     game_id = id
+    recent_games.erase(id)
+    recent_games.push_front(id)
+    while recent_games.size() > 3:
+        recent_games.pop_back()
+    _save()
     match id:
         "fast": _play_fast()
         "merge": _play_merge()
         "stack": _play_stack()
+        "memory": _play_memory()
 
 func _mount_game(g: Control):
     _shell()
@@ -324,6 +344,18 @@ func _play_stack():
     _mount_game(g)
     g.start_game()
 
+func _play_memory():
+    var g := MemoryMatch.new()
+    g.finished.connect(_finished)
+    _mount_game(g)
+    g.start_game()
+
+func _daily_challenge():
+    # Local daily rotation; does not require an online backend.
+    var day_key := int(Time.get_unix_time_from_system() / 86400.0)
+    var challenge_ids := ["fast", "merge", "stack", "memory"]
+    launch(challenge_ids[day_key % challenge_ids.size()])
+
 func _finished(id: String, score: int, extra: Dictionary = {}):
     var record := score > int(best_scores.get(id, 0))
     if record:
@@ -342,15 +374,22 @@ func _results(id: String, score: int, reward: int, record: bool):
     content.add_child(_button("↻  PLAY AGAIN", func(): launch(id), ACCENT))
     content.add_child(_button("⌂  BACK TO MINIVERSE", home, PANEL2))
 
-func _game_name(id: String) -> String:
+func _game_data(id: String) -> Dictionary:
     for g in GAMES:
-        if g.id == id: return g.title
+        if g.id == id:
+            return g
+    return {}
+
+func _game_name(id: String) -> String:
+    var data := _game_data(id)
+    if not data.is_empty():
+        return str(data.title)
     return "Mini-game"
 
 func _save():
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"recent_games":recent_games}))
         f.close()
 
 func _load_save():
@@ -364,3 +403,7 @@ func _load_save():
         xp = int(data.get("xp",0))
         level = int(data.get("level",1))
         best_scores = data.get("best_scores",{})
+        recent_games.clear()
+        for saved_id in data.get("recent_games", []):
+            if _game_data(str(saved_id)).size() > 0 and recent_games.size() < 3:
+                recent_games.append(str(saved_id))

@@ -47,6 +47,25 @@ func _draw() -> void:
             var font := ThemeDB.fallback_font
             if font:
                 draw_string(font, pos + Vector2(cell * 0.18, cell * 0.68), values[i], HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(10, int(cell * 0.45)), Color("#17172b"))
+    elif game_id == "memory":
+        # Four playful face-up cards with distinct symbols for Memory Match.
+        var card_w: float = w * 0.28
+        var card_h: float = h * 0.30
+        var gap: float = w * 0.045
+        var symbols: Array[String] = ["★", "♥", "☾", "◆"]
+        var card_colors: Array[Color] = [Color("#34d399"), Color("#f472b6"), Color("#60a5fa"), Color("#fbbf24")]
+        for i in range(4):
+            var row_i: int = int(i / 2)
+            var col_i: int = i % 2
+            var pos := Vector2(w * 0.5 - card_w - gap * 0.5 + float(col_i) * (card_w + gap),
+                h * 0.5 - card_h - gap * 0.5 + float(row_i) * (card_h + gap))
+            var card_rect := Rect2(pos, Vector2(card_w, card_h))
+            draw_rect(card_rect.grow(2.0), Color(card_colors[i].r, card_colors[i].g, card_colors[i].b, 0.18), true)
+            draw_rect(card_rect, card_colors[i], true)
+            draw_rect(card_rect, Color("#ffffff", 0.85), false, 1.5)
+            var font := ThemeDB.fallback_font
+            if font:
+                draw_string(font, pos + Vector2(card_w * 0.20, card_h * 0.68), symbols[i], HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(12, int(card_h * 0.55)), Color("#17172b"))
     else:
         var block_h: float = maxf(7.0, h * 0.12)
         var widths: Array[float] = [w * 0.68, w * 0.60, w * 0.50, w * 0.42]
