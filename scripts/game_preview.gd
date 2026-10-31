@@ -47,6 +47,17 @@ func _draw() -> void:
             var font := ThemeDB.fallback_font
             if font:
                 draw_string(font, pos + Vector2(cell * 0.18, cell * 0.68), values[i], HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(10, int(cell * 0.45)), Color("#17172b"))
+    elif game_id == "sort":
+        var tube_colors: Array[Color] = [Color("#ff739f"), Color("#55d9ff"), Color("#ffd15b"), Color("#83e69b")]
+        for i in range(3):
+            var tw: float = w * 0.18
+            var tx: float = w * (0.18 + 0.27 * float(i))
+            var ty: float = h * 0.20
+            var th: float = h * 0.60
+            draw_rect(Rect2(tx, ty, tw, th), Color("#15264c"), true)
+            for j in range(3):
+                draw_rect(Rect2(tx + 3, ty + th - float(j + 1) * th / 4.0, tw - 6, th / 4.0), tube_colors[(i + j) % 4], true)
+            draw_rect(Rect2(tx, ty, tw, th), Color("#b5f0ff"), false, 3.0)
     elif game_id == "whack":
         var hole_radius: float = minf(w, h) * 0.13
         for i in range(6):
