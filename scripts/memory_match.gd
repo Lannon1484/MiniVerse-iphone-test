@@ -4,7 +4,17 @@ class_name MemoryMatch
 signal finished(game_id: String, score: int, extra: Dictionary)
 
 const FACE_DOWN := "✦"
-const SYMBOLS := ["A", "B", "C", "D", "E", "F", "G", "H"]
+const SYMBOLS := ["star", "heart", "moon", "diamond", "flower", "sun", "rocket", "cloud"]
+const PICTURES := {
+    "star": preload("res://assets/memory_symbols/star.png"),
+    "heart": preload("res://assets/memory_symbols/heart.png"),
+    "moon": preload("res://assets/memory_symbols/moon.png"),
+    "diamond": preload("res://assets/memory_symbols/diamond.png"),
+    "flower": preload("res://assets/memory_symbols/flower.png"),
+    "sun": preload("res://assets/memory_symbols/sun.png"),
+    "rocket": preload("res://assets/memory_symbols/rocket.png"),
+    "cloud": preload("res://assets/memory_symbols/cloud.png")
+}
 const FACE_COLORS := [Color("#f97373"), Color("#38bdf8"), Color("#fbbf24"), Color("#c084fc"), Color("#34d399"), Color("#fb923c"), Color("#f472b6"), Color("#a3e635")]
 const CARD := Color("#40549a")
 const ACCENT := Color("#34d399")
@@ -39,7 +49,7 @@ func _build_ui() -> void:
     title.add_theme_color_override("font_color", Color("#d1fae5"))
     root.add_child(title)
     var subtitle := Label.new()
-    subtitle.text = "Match the big colorful letters! Find all 8 pairs."
+    subtitle.text = "Match the colorful pictures! Find all 8 pairs."
     subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     subtitle.add_theme_color_override("font_color", Color("#c4cbe8"))
@@ -90,6 +100,9 @@ func _new_round() -> void:
         matched.append(false)
         var button := Button.new()
         button.text = FACE_DOWN
+        button.expand_icon = true
+        button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        button.alignment = HORIZONTAL_ALIGNMENT_CENTER
         button.custom_minimum_size = Vector2(0, 125)
         button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         button.add_theme_font_size_override("font_size", 54)
@@ -120,7 +133,8 @@ func _card_style(color: Color) -> StyleBoxFlat:
 
 func _pick(index: int) -> void:
     if not running or lock_board or matched[index] or index == first_pick: return
-    buttons[index].text = cards[index]
+    buttons[index].text = ""
+    buttons[index].icon = PICTURES[cards[index]]
     var face_color: Color = FACE_COLORS[SYMBOLS.find(cards[index])]
     buttons[index].add_theme_stylebox_override("normal", _card_style(face_color))
     if first_pick == -1:
@@ -152,9 +166,11 @@ func _pick(index: int) -> void:
         await get_tree().create_timer(0.75).timeout
         if not is_inside_tree(): return
         if not matched[old_pick]:
+            buttons[old_pick].icon = null
             buttons[old_pick].text = FACE_DOWN
             buttons[old_pick].add_theme_stylebox_override("normal", _card_style(CARD))
         if not matched[index]:
+            buttons[index].icon = null
             buttons[index].text = FACE_DOWN
             buttons[index].add_theme_stylebox_override("normal", _card_style(CARD))
         lock_board = false
