@@ -21,8 +21,17 @@ const MELODY_SOUNDS := [
     preload("res://assets/sfx/melody_6.wav"),
     preload("res://assets/sfx/melody_7.wav")
 ]
-# Simple original phrase: C E G E | D F A G | E G C' G | F E D C
-const MELODY := [0, 2, 3, 2, 1, 3, 4, 3, 2, 3, 5, 3, 3, 2, 1, 0]
+# Five original pentatonic phrases. Later levels use longer, more varied tunes.
+# Each entry indexes the eight generated bell sounds above.
+const SONG_NAMES := ["First Steps", "Little Lanterns", "Cloud Parade", "Starlight Dance", "Sky Festival"]
+const SONGS := [
+    [0, 2, 3, 2, 0, 2, 3, 0],
+    [0, 1, 2, 3, 2, 1, 0, 3, 2, 3, 4, 3, 2, 1, 0, 0],
+    [0, 2, 4, 3, 2, 1, 3, 2, 1, 3, 5, 4, 3, 2, 1, 0],
+    [2, 3, 5, 3, 4, 3, 2, 1, 0, 2, 3, 4, 5, 4, 3, 2],
+    [0, 2, 3, 5, 4, 3, 2, 0, 1, 3, 4, 5, 6, 5, 4, 3]
+]
+var song_name := "First Steps"
 var sound_enabled := true
 var note_players: Array[AudioStreamPlayer] = []
 var notes: Array[Dictionary] = []
@@ -103,6 +112,9 @@ func _restart() -> void:
     misses = 0
     running = true
     notes.clear()
+    var song_index: int = mini(level - 1, SONGS.size() - 1)
+    song_name = SONG_NAMES[song_index]
+    var song: Array = SONGS[song_index]
     var lane := rng.randi_range(0, active_lanes - 1)
     for i in range(note_total):
         # Level 1 teaches a predictable left/right rhythm.
@@ -113,8 +125,8 @@ func _restart() -> void:
             lane = int(i / 2) % 2
         elif active_lanes > 1:
             lane = rng.randi_range(0, active_lanes - 1)
-        notes.append({"lane": lane, "time": 2.6 + i * beat_interval, "state": 0, "pitch": MELODY[i % MELODY.size()]})
-    feedback.text = "LEVEL %d: Catch the notes to play a little tune!" % level
+        notes.append({"lane": lane, "time": 2.6 + i * beat_interval, "state": 0, "pitch": int(song[i % song.size()])})
+    feedback.text = "LEVEL %d - %s: Catch notes to play the tune!" % [level, song_name]
     _refresh()
 
 func _process(delta: float) -> void:
@@ -180,7 +192,7 @@ func _hit(lane: int) -> void:
 
 func _refresh() -> void:
     if is_instance_valid(stats):
-        stats.text = "LV %d  SCORE %d  COMBO %d  %d/%d" % [level, score, combo, hits + misses, note_total]
+        stats.text = "LV %d  %s  |  SCORE %d  COMBO %d  %d/%d" % [level, song_name, score, combo, hits + misses, note_total]
     if is_instance_valid(arena):
         arena.queue_redraw()
 

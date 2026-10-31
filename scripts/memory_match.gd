@@ -34,10 +34,6 @@ var moves_label: Label
 var score_label: Label
 var grid: GridContainer
 var running := true
-var next_button: Button
-var claim_button: Button
-var round_completed := false
-var round_score := 0
 var round_serial := 0
 
 func start_game() -> void:
@@ -86,31 +82,6 @@ func _build_ui() -> void:
     restart.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     restart.pressed.connect(_new_round)
     root.add_child(restart)
-    next_button = Button.new()
-    next_button.text = "NEXT LEVEL"
-    next_button.custom_minimum_size.y = 68
-    next_button.visible = false
-    next_button.pressed.connect(_next_level)
-    root.add_child(next_button)
-    claim_button = Button.new()
-    claim_button.text = "CLAIM REWARD & FINISH"
-    claim_button.custom_minimum_size.y = 60
-    claim_button.visible = false
-    claim_button.pressed.connect(_claim_reward)
-    root.add_child(claim_button)
-
-func _next_level() -> void:
-    if not round_completed:
-        return
-    Difficulty.complete("memory")
-    _new_round()
-
-func _claim_reward() -> void:
-    if not round_completed:
-        return
-    round_completed = false
-    finished.emit("memory", round_score, {"moves": moves, "pairs": pairs_found})
-
 func _stat_label(value: String) -> Label:
     var label := Label.new()
     label.text = value
@@ -124,11 +95,6 @@ func _new_round() -> void:
     difficulty_level = Difficulty.level("memory")
     round_serial += 1
     var this_round: int = round_serial
-    round_completed = false
-    if is_instance_valid(next_button):
-        next_button.visible = false
-    if is_instance_valid(claim_button):
-        claim_button.visible = false
     cards.clear(); buttons.clear(); matched.clear()
     first_pick = -1; lock_board = false; moves = 0; pairs_found = 0; score = 0; running = true
     var pair_count: int = mini(8, 2 + difficulty_level)
@@ -212,11 +178,9 @@ func _pick(index: int) -> void:
             score += maxi(0, 200 - moves * 5)
             _refresh_stats()
             status_label.text = "✨ All pairs found in %d moves!" % moves
-            round_completed = true
-            round_score = score
-            next_button.visible = true
-            claim_button.visible = true
-            status_label.text = "Level %d complete! Choose NEXT LEVEL to keep playing." % difficulty_level
+            status_label.text = "Level %d complete! Collecting rewards..." % difficulty_level
+            # The shared results screen handles rewards, Retry and Next Level.
+            finished.emit("memory", score, {"moves": moves, "pairs": pairs_found})
     else:
         lock_board = true
         status_label.text = "Not a match — try again!"

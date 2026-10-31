@@ -62,19 +62,13 @@ func start_game() -> void:
     var actions := HBoxContainer.new()
     actions.add_theme_constant_override("separation", 10)
     layout.add_child(actions)
-    for item in [["RESET", "reset"], ["NEXT PUZZLE", "next"]]:
+    for item in [["RESET", "reset"]]:
         var button := Button.new()
         button.text = item[0]
         button.custom_minimum_size.y = 65
         button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         button.pressed.connect(_action.bind(item[1]))
         actions.add_child(button)
-    claim_button = Button.new()
-    claim_button.text = "CLAIM REWARD"
-    claim_button.custom_minimum_size.y = 65
-    claim_button.visible = false
-    claim_button.pressed.connect(_claim_reward)
-    layout.add_child(claim_button)
     # Use the shared saved level so the Settings reset control works here too.
     level = maxi(0, Difficulty.level("dots") - 1)
     _setup_level()
@@ -131,8 +125,6 @@ func _setup_level() -> void:
     moves = 0
     won = false
     reward_claimed = false
-    if is_instance_valid(claim_button):
-        claim_button.visible = false
     current_endpoints = _generate_puzzle(level)
     board.endpoints = current_endpoints
     board.paths = paths
@@ -203,8 +195,10 @@ func _touch_cell(cell: Vector2i, beginning: bool) -> void:
     if _connected_count() == COLORS.size():
         won = true
         var score: int = maxi(100, 900 - moves * 30)
-        message.text = "ALL CONNECTED! +%d points! Claim reward or try the next puzzle." % score
-        claim_button.visible = true
+        message.text = "ALL CONNECTED! +%d points!" % score
+        # Defer the transition until the input event has finished. The shared
+        # results screen handles rewards and the one-and-only Next Level action.
+        call_deferred("_claim_reward")
 
 func _claim_reward() -> void:
     if not won or reward_claimed:
@@ -217,17 +211,8 @@ func _end_drag() -> void:
     active_color = -1
 
 func _action(which: String) -> void:
-    if which == "next":
-        if not won:
-            message.text = "Connect all four pairs before the next puzzle!"
-            return
-        # Progress is committed by the shared results/reward system.
-        # Claim the reward first so the next level is saved.
-        if not reward_claimed:
-            _claim_reward()
-            return
-        level += 1
-    _setup_level()
+    if which == "reset":
+        _setup_level()
 
 class DotBoard extends Control:
     signal cell_touched(cell: Vector2i, beginning: bool)

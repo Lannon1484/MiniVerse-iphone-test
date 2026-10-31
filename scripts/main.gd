@@ -656,6 +656,24 @@ func _finished(id: String, score: int, extra: Dictionary = {}):
     _play_sound(SFX_WIN if passed else SFX_OOPS)
     _results(id, score, reward, record, earned_xp, stars_earned, played_level, goal, passed)
 
+# Full recordings of the original level melodies. Only play after a successful clear.
+const RHYTHM_COMPLETION_SONGS := [
+    preload("res://assets/sfx/rhythm_song_1.wav"),
+    preload("res://assets/sfx/rhythm_song_2.wav"),
+    preload("res://assets/sfx/rhythm_song_3.wav"),
+    preload("res://assets/sfx/rhythm_song_4.wav"),
+    preload("res://assets/sfx/rhythm_song_5.wav")
+]
+
+func _play_completed_rhythm_song(played_level: int) -> void:
+    if not sound_enabled:
+        return
+    var melody_player := AudioStreamPlayer.new()
+    melody_player.stream = RHYTHM_COMPLETION_SONGS[clampi(played_level - 1, 0, RHYTHM_COMPLETION_SONGS.size() - 1)]
+    melody_player.volume_db = -7.0
+    content.add_child(melody_player)
+    melody_player.play()
+
 func _results(id: String, score: int, reward: int, record: bool, earned_xp: int, stars_earned: int, played_level: int, goal: int, passed: bool):
     _shell()
     _heading("Level Complete!" if passed else "Try Again!", "Level %d • %s" % [played_level, "Goal reached!" if passed else "You can retry this level."])
@@ -688,6 +706,28 @@ func _results(id: String, score: int, reward: int, record: bool, earned_xp: int,
     result.add_theme_font_size_override("font_size", 21)
     result.add_theme_color_override("font_color", TEXT)
     column.add_child(result)
+    # A visual goal meter helps players understand how close they were.
+    if id not in ["memory", "sort", "dots"]:
+        var goal_meter := ProgressBar.new()
+        goal_meter.custom_minimum_size = Vector2(0, 24)
+        goal_meter.min_value = 0.0
+        goal_meter.max_value = 100.0
+        goal_meter.value = clampf(float(score) / float(maxi(goal, 1)) * 100.0, 0.0, 100.0)
+        goal_meter.show_percentage = false
+        column.add_child(goal_meter)
+        var goal_caption := Label.new()
+        goal_caption.text = "%d%% of level goal" % int(round(float(score) / float(maxi(goal, 1)) * 100.0))
+        goal_caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        goal_caption.add_theme_font_size_override("font_size", 14)
+        goal_caption.add_theme_color_override("font_color", Color("#b9c7ec"))
+        column.add_child(goal_caption)
+    var tip := Label.new()
+    tip.text = _result_tip(id, passed, stars_earned)
+    tip.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    tip.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    tip.add_theme_font_size_override("font_size", 16)
+    tip.add_theme_color_override("font_color", Color("#b9c7ec"))
+    column.add_child(tip)
     celebration.modulate.a = 0.0
     celebration.scale = Vector2(0.94, 0.94)
     var reveal := create_tween()
@@ -695,10 +735,18 @@ func _results(id: String, score: int, reward: int, record: bool, earned_xp: int,
     reveal.tween_property(celebration, "modulate:a", 1.0, 0.42)
     reveal.tween_property(celebration, "scale", Vector2.ONE, 0.42).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
     # Confetti is drawn above the results without blocking buttons or scrolling.
-    var confetti := RewardConfetti.new()
-    confetti.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    confetti.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    add_child(confetti)
+    if passed:
+        var confetti := RewardConfetti.new()
+        confetti.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+        confetti.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        add_child(confetti)
+    if id == "rhythm" and passed:
+        var song_label := Label.new()
+        song_label.text = "Your completed song is playing!"
+        song_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        content.add_child(song_label)
+        content.add_child(_button("PLAY SONG AGAIN", func(): _play_completed_rhythm_song(played_level), PANEL2))
+        _play_completed_rhythm_song(played_level)
     if passed:
         var next_button := _button("NEXT LEVEL", func(): launch(id), ACCENT)
         next_button.icon = preload("res://assets/ui/next_level.png")
@@ -708,6 +756,20 @@ func _results(id: String, score: int, reward: int, record: bool, earned_xp: int,
     content.add_child(_button("RETRY LEVEL %d" % played_level, func(): _retry_level(id, played_level), PANEL2))
 
     content.add_child(_button("BACK TO MINIVERSE", home, PANEL2))
+
+func _result_tip(id: String, passed: bool, stars_earned: int) -> String:
+    if passed:
+        return "Outstanding! Three stars earned." if stars_earned == 3 else "Level cleared! Replay to aim for three stars."
+    var hints := {
+        "fast": "Tip: Keep your combo going by tapping targets quickly.",
+        "stack": "Tip: Watch the edges and time each drop carefully.",
+        "whack": "Tip: Avoid the snakes and focus on safe moles.",
+        "merge": "Tip: Build bigger merges to reach the score target.",
+        "snake": "Tip: Plan your turns before you reach the wall.",
+        "hopper": "Tip: Aim for the center of each platform.",
+        "rhythm": "Tip: Tap when notes enter the glowing catch zone."
+    }
+    return str(hints.get(id, "Try again — every attempt helps you improve."))
 
 func _retry_level(id: String, played_level: int) -> void:
     Difficulty.set_retry_level(id, played_level)
