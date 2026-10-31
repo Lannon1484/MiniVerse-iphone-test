@@ -341,11 +341,21 @@ func _game_card(g: Dictionary) -> PanelContainer:
     genre.add_theme_font_size_override("font_size", 10)
     genre.add_theme_color_override("font_color", g.color)
     detail.add_child(genre)
+    var progress_row := HBoxContainer.new()
+    progress_row.add_theme_constant_override("separation", 3)
+    detail.add_child(progress_row)
     var progress := Label.new()
-    progress.text = "LEVEL %d   •   BEST %s" % [Difficulty.level(str(g.id)), "★".repeat(int(best_stars.get(str(g.id), 0))) + "☆".repeat(3 - int(best_stars.get(str(g.id), 0)))]
+    progress.text = "LEVEL %d   BEST" % Difficulty.level(str(g.id))
     progress.add_theme_font_size_override("font_size", 11)
     progress.add_theme_color_override("font_color", Color("#ffe29e"))
-    detail.add_child(progress)
+    progress_row.add_child(progress)
+    for star_index in range(3):
+        var star_icon := TextureRect.new()
+        star_icon.texture = preload("res://assets/ui/star_filled.png") if star_index < int(best_stars.get(str(g.id), 0)) else preload("res://assets/ui/star_empty.png")
+        star_icon.custom_minimum_size = Vector2(13, 13)
+        star_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        star_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        progress_row.add_child(star_icon)
     var desc := Label.new()
     desc.text = g.desc
     desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -654,12 +664,17 @@ func _results(id: String, score: int, reward: int, record: bool, earned_xp: int,
     var column := VBoxContainer.new()
     column.add_theme_constant_override("separation", 9)
     celebration.add_child(column)
-    var stars := Label.new()
-    stars.text = "★ ".repeat(stars_earned) + "☆ ".repeat(3 - stars_earned)
-    stars.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    stars.add_theme_font_size_override("font_size", 39)
-    stars.add_theme_color_override("font_color", Color("#ffdb78"))
-    column.add_child(stars)
+    var stars_row := HBoxContainer.new()
+    stars_row.alignment = BoxContainer.ALIGNMENT_CENTER
+    stars_row.add_theme_constant_override("separation", 10)
+    column.add_child(stars_row)
+    for star_index in range(3):
+        var star_icon := TextureRect.new()
+        star_icon.texture = preload("res://assets/ui/star_filled.png") if star_index < stars_earned else preload("res://assets/ui/star_empty.png")
+        star_icon.custom_minimum_size = Vector2(52, 52)
+        star_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        star_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        stars_row.add_child(star_icon)
     var title := Label.new()
     title.text = "NEW PERSONAL BEST!" if record else ("LEVEL CLEARED!" if passed else "KEEP PRACTICING!")
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -684,10 +699,14 @@ func _results(id: String, score: int, reward: int, record: bool, earned_xp: int,
     confetti.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(confetti)
     if passed:
-        content.add_child(_button("NEXT LEVEL  →", func(): launch(id), ACCENT))
-    content.add_child(_button("↻  RETRY LEVEL %d" % played_level, func(): _retry_level(id, played_level), PANEL2))
+        var next_button := _button("NEXT LEVEL", func(): launch(id), ACCENT)
+        next_button.icon = preload("res://assets/ui/next_level.png")
+        next_button.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+        next_button.expand_icon = true
+        content.add_child(next_button)
+    content.add_child(_button("RETRY LEVEL %d" % played_level, func(): _retry_level(id, played_level), PANEL2))
 
-    content.add_child(_button("⌂  BACK TO MINIVERSE", home, PANEL2))
+    content.add_child(_button("BACK TO MINIVERSE", home, PANEL2))
 
 func _retry_level(id: String, played_level: int) -> void:
     Difficulty.set_retry_level(id, played_level)
