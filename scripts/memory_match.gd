@@ -3,7 +3,7 @@ class_name MemoryMatch
 
 signal finished(game_id: String, score: int, extra: Dictionary)
 
-const FACE_DOWN := "✦"
+const CARD_BACK = preload("res://assets/memory_symbols/card_back.png")
 const SYMBOLS := ["star", "heart", "moon", "diamond", "flower", "sun", "rocket", "cloud"]
 const PICTURES := {
     "star": preload("res://assets/memory_symbols/star.png"),
@@ -99,7 +99,8 @@ func _new_round() -> void:
     for i in range(cards.size()):
         matched.append(false)
         var button := Button.new()
-        button.text = FACE_DOWN
+        button.text = ""
+        button.icon = CARD_BACK
         button.expand_icon = true
         button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
         button.alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -166,12 +167,12 @@ func _pick(index: int) -> void:
         await get_tree().create_timer(0.75).timeout
         if not is_inside_tree(): return
         if not matched[old_pick]:
-            buttons[old_pick].icon = null
-            buttons[old_pick].text = FACE_DOWN
+            buttons[old_pick].text = ""
+            buttons[old_pick].icon = CARD_BACK
             buttons[old_pick].add_theme_stylebox_override("normal", _card_style(CARD))
         if not matched[index]:
-            buttons[index].icon = null
-            buttons[index].text = FACE_DOWN
+            buttons[index].text = ""
+            buttons[index].icon = CARD_BACK
             buttons[index].add_theme_stylebox_override("normal", _card_style(CARD))
         lock_board = false
 

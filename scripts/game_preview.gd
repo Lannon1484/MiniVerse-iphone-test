@@ -47,6 +47,18 @@ func _draw() -> void:
             var font := ThemeDB.fallback_font
             if font:
                 draw_string(font, pos + Vector2(cell * 0.18, cell * 0.68), values[i], HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(10, int(cell * 0.45)), Color("#17172b"))
+    elif game_id == "whack":
+        var hole_radius: float = minf(w, h) * 0.13
+        for i in range(6):
+            var center_hole := Vector2(w * (0.25 + 0.25 * float(i % 3)), h * (0.38 + 0.28 * float(int(i / 3))))
+            draw_circle(center_hole, hole_radius, Color("#26365d"))
+            draw_arc(center_hole, hole_radius, 0, TAU, 32, Color("#7894c8"), 2.0)
+            if i == 1 or i == 5:
+                draw_circle(center_hole + Vector2(0, -4), hole_radius * 0.8, Color("#38d9b4"))
+                draw_circle(center_hole + Vector2(-5, -6), 2.0, Color("#173c3a"))
+                draw_circle(center_hole + Vector2(5, -6), 2.0, Color("#173c3a"))
+            elif i == 3:
+                draw_circle(center_hole + Vector2(0, -4), hole_radius * 0.8, Color("#fb7185"))
     elif game_id == "memory":
         # Four playful face-up cards with distinct symbols for Memory Match.
         var card_w: float = w * 0.28

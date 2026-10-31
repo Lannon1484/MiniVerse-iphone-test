@@ -12,11 +12,13 @@ const GamePreview = preload("res://scripts/game_preview.gd")
 const TouchFeedback = preload("res://scripts/touch_feedback.gd")
 const HomeHero = preload("res://scripts/home_hero.gd")
 const MemoryMatch = preload("res://scripts/memory_match.gd")
+const WhackAMole = preload("res://scripts/whack_a_mole.gd")
 const GAMES := [
     {"id":"fast","title":"Fast Fingers","genre":"REFLEX ARCADE","desc":"Tap targets before time runs out.","color":Color("#f9738f")},
     {"id":"merge","title":"Number Merge","genre":"PUZZLE","desc":"Merge matching tiles to reach bigger numbers.","color":Color("#60a5fa")},
     {"id":"stack","title":"Perfect Stack","genre":"TIMING","desc":"Drop moving blocks and build a tower.","color":Color("#fbbf24")},
-    {"id":"memory","title":"Memory Match","genre":"BRAIN TRAINER","desc":"Flip cards and find all matching pairs.","color":Color("#34d399")}
+    {"id":"memory","title":"Memory Match","genre":"BRAIN TRAINER","desc":"Flip cards and find all matching pairs.","color":Color("#34d399")},
+    {"id":"whack","title":"Whack-a-Mole","genre":"REFLEX ARCADE","desc":"Tap green critters, avoid red decoys!","color":Color("#38d9b4")}
 ]
 
 var content: VBoxContainer
@@ -275,7 +277,7 @@ func events():
     _shell()
     _heading("Challenges & Events", "Event previews for the growing MiniVerse.")
     var day_key := int(Time.get_unix_time_from_system() / 86400.0)
-    var challenge_ids := ["fast", "merge", "stack", "memory"]
+    var challenge_ids := ["fast", "merge", "stack", "memory", "whack"]
     var challenge_id: String = challenge_ids[day_key % challenge_ids.size()]
     _card("☀ DAILY DASH", "Today's featured game: %s. Finish a round to earn coins and XP." % _game_name(challenge_id))
     content.add_child(_button("▶  PLAY DAILY CHALLENGE", _daily_challenge, Color("#fbbf24")))
@@ -313,6 +315,7 @@ func launch(id: String):
         "merge": _play_merge()
         "stack": _play_stack()
         "memory": _play_memory()
+        "whack": _play_whack()
 
 func _mount_game(g: Control):
     _shell()
@@ -350,10 +353,16 @@ func _play_memory():
     _mount_game(g)
     g.start_game()
 
+func _play_whack():
+    var g := WhackAMole.new()
+    g.finished.connect(_finished)
+    _mount_game(g)
+    g.start_game()
+
 func _daily_challenge():
     # Local daily rotation; does not require an online backend.
     var day_key := int(Time.get_unix_time_from_system() / 86400.0)
-    var challenge_ids := ["fast", "merge", "stack", "memory"]
+    var challenge_ids := ["fast", "merge", "stack", "memory", "whack"]
     launch(challenge_ids[day_key % challenge_ids.size()])
 
 func _finished(id: String, score: int, extra: Dictionary = {}):
