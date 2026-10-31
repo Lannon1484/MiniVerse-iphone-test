@@ -612,7 +612,134 @@ func _show_tutorial(id: String) -> void:
         label.add_theme_font_size_override("font_size", 17)
         label.add_theme_color_override("font_color", TEXT)
         body.add_child(label)
-    body.add_child(_button("LET'S PLAY!", func(): _dismiss_tutorial(id), ACCENT, 60))
+    # First interactive lessons: players practice the core action before
+    # starting Fast Fingers and Memory Match. Other games retain their
+    # illustrated instructions while their practice interactions are built.
+    if id == "fast":
+        _tutorial_fast_practice(body, id)
+    elif id == "memory":
+        _tutorial_memory_practice(body, id)
+    elif id == "merge" or id == "snake":
+        _tutorial_swipe_practice(body, id)
+    else:
+        body.add_child(_button("LET'S PLAY!", func(): _dismiss_tutorial(id), ACCENT, 60))
+
+func _tutorial_fast_practice(body: VBoxContainer, id: String) -> void:
+    var prompt := Label.new()
+    prompt.text = "PRACTICE: Tap the target three times!"
+    prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    prompt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    prompt.add_theme_color_override("font_color", CYAN)
+    body.add_child(prompt)
+    var target := _button("TAP TARGET  (0/3)", func(): pass, Color("#f9738f"), 64)
+    body.add_child(target)
+    var start := _button("LET'S PLAY!", func(): _dismiss_tutorial(id), ACCENT, 60)
+    start.disabled = true
+    body.add_child(start)
+    var taps := [0]
+    target.pressed.connect(func():
+        taps[0] += 1
+        target.text = "TAP TARGET  (%d/3)" % mini(taps[0], 3)
+        if taps[0] >= 3:
+            target.disabled = true
+            prompt.text = "Great tapping! You're ready to play."
+            start.disabled = false
+    )
+
+func _tutorial_memory_practice(body: VBoxContainer, id: String) -> void:
+    var prompt := Label.new()
+    prompt.text = "PRACTICE: Flip both matching cards!"
+    prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    prompt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    prompt.add_theme_color_override("font_color", CYAN)
+    body.add_child(prompt)
+    var cards := HBoxContainer.new()
+    cards.alignment = BoxContainer.ALIGNMENT_CENTER
+    body.add_child(cards)
+    var start := _button("LET'S PLAY!", func(): _dismiss_tutorial(id), ACCENT, 60)
+    start.disabled = true
+    var flipped := [false, false]
+    for i in range(2):
+        var index: int = i
+        var card := _button("?", func(): pass, Color("#34d399"), 68)
+        card.custom_minimum_size.x = 92
+        cards.add_child(card)
+        card.pressed.connect(func():
+            if flipped[index]:
+                return
+            flipped[index] = true
+            card.text = ""
+            card.icon = preload("res://assets/memory_symbols/sun.png")
+            card.expand_icon = true
+            card.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+            card.disabled = true
+            if flipped[0] and flipped[1]:
+                prompt.text = "Matching pair found! You're ready."
+                start.disabled = false
+        )
+    body.add_child(start)
+
+func _tutorial_swipe_practice(body: VBoxContainer, id: String) -> void:
+    var prompt := Label.new()
+    prompt.text = "PRACTICE: Swipe LEFT, then RIGHT in the box!"
+    prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    prompt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    prompt.add_theme_color_override("font_color", CYAN)
+    body.add_child(prompt)
+
+    var practice := PanelContainer.new()
+    practice.custom_minimum_size = Vector2(240, 118)
+    practice.add_theme_stylebox_override("panel", _style(PANEL2, 16))
+    practice.mouse_filter = Control.MOUSE_FILTER_STOP
+    body.add_child(practice)
+    var hint := Label.new()
+    hint.text = "DRAG  <    >"
+    hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    hint.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    hint.add_theme_font_size_override("font_size", 23)
+    hint.add_theme_color_override("font_color", Color("#67e8f9"))
+    practice.add_child(hint)
+
+    var start := _button("LET'S PLAY!", func(): _dismiss_tutorial(id), ACCENT, 60)
+    start.disabled = true
+    body.add_child(start)
+
+    var stage := [0]
+    var start_position := [Vector2.ZERO]
+    var dragging := [false]
+    practice.gui_input.connect(func(event: InputEvent):
+        var released := false
+        var position := Vector2.ZERO
+        if event is InputEventScreenTouch:
+            position = event.position
+            if event.pressed:
+                dragging[0] = true
+                start_position[0] = position
+            else:
+                released = true
+        elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+            position = event.position
+            if event.pressed:
+                dragging[0] = true
+                start_position[0] = position
+            else:
+                released = true
+        if released and dragging[0]:
+            dragging[0] = false
+            var delta: Vector2 = position - start_position[0]
+            if absf(delta.x) < 45.0 or absf(delta.x) < absf(delta.y):
+                return
+            if stage[0] == 0 and delta.x < 0.0:
+                stage[0] = 1
+                hint.text = "LEFT DONE!  Now swipe RIGHT"
+                prompt.text = "Great! Now swipe to the right."
+            elif stage[0] == 1 and delta.x > 0.0:
+                stage[0] = 2
+                hint.text = "BOTH SWIPES COMPLETE!"
+                prompt.text = "Well done! You're ready to play."
+                start.disabled = false
+    )
 
 func _dismiss_tutorial(id: String) -> void:
     seen_tutorials[id] = true
