@@ -84,7 +84,7 @@ func _restart() -> void:
     platforms = [Vector2(180, 495)]
     stars.clear()
     for i in range(1, 30):
-        var spacing: float = minf(112.0, 85.0 + float(difficulty_level - 1) * 2.0)
+        var spacing: float = _platform_spacing()
         var y: float = 495.0 - i * spacing
         var x: float = rng.randf_range(110.0 - minf(40.0, float(difficulty_level - 1) * 3.0), 250.0 + minf(40.0, float(difficulty_level - 1) * 3.0))
         platforms.append(Vector2(x, y))
@@ -98,8 +98,13 @@ func _restart() -> void:
     left_down = false
     right_down = false
     drag_direction = 0
-    message.text = "Bounce automatically • Steer to floating islands"
+    message.text = "LEVEL %d  |  Bounce automatically • Steer to islands" % difficulty_level
     _refresh()
+
+func _platform_spacing() -> float:
+    # Five introductory levels: 85, 91, 97, 103, 109 pixels.
+    # Later levels cap at 112 to stay within jump reach.
+    return minf(112.0, 85.0 + float(difficulty_level - 1) * 6.0)
 
 func _set_button(sign: int, down: bool) -> void:
     if sign < 0:
@@ -154,8 +159,10 @@ func _physics_process(delta: float) -> void:
     # Extend the sky indefinitely as the player climbs.
     if platforms.back().y > camera_y - 250.0:
         for i in range(12):
-            var y: float = platforms.back().y - 102.0
-            var x: float = rng.randf_range(70, 290)
+            var y: float = platforms.back().y - _platform_spacing()
+            # Keep consecutive platforms within a reachable horizontal gap.
+            var previous_x: float = platforms.back().x
+            var x: float = clampf(previous_x + rng.randf_range(-115.0, 115.0), 70.0, 290.0)
             platforms.append(Vector2(x, y))
             if rng.randf() < 0.55:
                 stars.append(Vector2(x, y - 49.0))

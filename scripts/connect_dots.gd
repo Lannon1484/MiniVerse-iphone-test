@@ -75,6 +75,8 @@ func start_game() -> void:
     claim_button.visible = false
     claim_button.pressed.connect(_claim_reward)
     layout.add_child(claim_button)
+    # Use the shared saved level so the Settings reset control works here too.
+    level = maxi(0, Difficulty.level("dots") - 1)
     _setup_level()
 
 func _generate_puzzle(puzzle_index: int) -> Array:
@@ -134,7 +136,7 @@ func _setup_level() -> void:
     current_endpoints = _generate_puzzle(level)
     board.endpoints = current_endpoints
     board.paths = paths
-    message.text = "Connect each matching pair!"
+    message.text = "LEVEL %d  |  Connect each matching pair!" % (level + 1)
     _refresh()
 
 func _refresh() -> void:
@@ -216,6 +218,14 @@ func _end_drag() -> void:
 
 func _action(which: String) -> void:
     if which == "next":
+        if not won:
+            message.text = "Connect all four pairs before the next puzzle!"
+            return
+        # Progress is committed by the shared results/reward system.
+        # Claim the reward first so the next level is saved.
+        if not reward_claimed:
+            _claim_reward()
+            return
         level += 1
     _setup_level()
 

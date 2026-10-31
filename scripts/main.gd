@@ -623,11 +623,12 @@ func _level_goal(id: String, played_level: int) -> int:
         "fast": [30, 50, 75, 105, 135],
         "stack": [2, 3, 4, 5, 6],
         "whack": [35, 50, 65, 85, 105],
-        "merge": [16, 32, 48, 72, 96]
+        "merge": [16, 32, 48, 72, 96],
+        "rhythm": [350, 650, 950, 1300, 1650]
     }
     if first_five.has(id) and played_level <= 5:
         return int(first_five[id][played_level - 1])
-    var base_goals := {"fast": 135, "merge": 24, "stack": 6, "whack": 105, "snake": 3, "hopper": 3, "rhythm": 25}
+    var base_goals := {"fast": 135, "merge": 24, "stack": 6, "whack": 105, "snake": 3, "hopper": 3, "rhythm": 1650}
     var base: int = int(base_goals.get(id, 1))
     var step: int = maxi(0, played_level - (5 if first_five.has(id) else 1))
     return maxi(1, int(round(float(base) * (1.0 + 0.10 * float(step)))))

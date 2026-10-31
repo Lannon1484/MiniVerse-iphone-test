@@ -1,4 +1,5 @@
 extends Control
+const Difficulty = preload("res://scripts/difficulty.gd")
 signal finished(game_id: String, score: int, extra: Dictionary)
 const COLORS := [Color("#ff82bd"), Color("#76d9ff"), Color("#ffe18b"), Color("#a58bff")]
 # Early levels are slower and more forgiving; later rounds ramp up gently.
@@ -9,7 +10,19 @@ var hit_window := 0.30
 var perfect_window := 0.13
 var active_lanes := 2
 var travel_time := 2.2
-const NOTE_SOUNDS := [preload("res://assets/sfx/note_pink.wav"), preload("res://assets/sfx/note_blue.wav"), preload("res://assets/sfx/note_gold.wav"), preload("res://assets/sfx/note_purple.wav")]
+# Original eight-note melody, played one note at a time by the player.
+const MELODY_SOUNDS := [
+    preload("res://assets/sfx/melody_0.wav"),
+    preload("res://assets/sfx/melody_1.wav"),
+    preload("res://assets/sfx/melody_2.wav"),
+    preload("res://assets/sfx/melody_3.wav"),
+    preload("res://assets/sfx/melody_4.wav"),
+    preload("res://assets/sfx/melody_5.wav"),
+    preload("res://assets/sfx/melody_6.wav"),
+    preload("res://assets/sfx/melody_7.wav")
+]
+# Simple original phrase: C E G E | D F A G | E G C' G | F E D C
+const MELODY := [0, 2, 3, 2, 1, 3, 4, 3, 2, 3, 5, 3, 3, 2, 1, 0]
 var sound_enabled := true
 var note_players: Array[AudioStreamPlayer] = []
 var notes: Array[Dictionary] = []
@@ -26,9 +39,9 @@ var rng := RandomNumberGenerator.new()
 
 func start_game() -> void:
     rng.randomize()
-    for i in range(4):
+    for i in range(MELODY_SOUNDS.size()):
         var player := AudioStreamPlayer.new()
-        player.stream = NOTE_SOUNDS[i]
+        player.stream = MELODY_SOUNDS[i]
         player.volume_db = -8.0
         add_child(player)
         note_players.append(player)
@@ -71,21 +84,18 @@ func start_game() -> void:
     restart.text = "RETRY LEVEL"
     restart.custom_minimum_size.y = 54
     restart.pressed.connect(_restart)
-    var next := Button.new()
-    next.text = "NEXT LEVEL"
-    next.custom_minimum_size.y = 50
-    next.pressed.connect(_next_level)
-    layout.add_child(next)
     layout.add_child(restart)
+    level = Difficulty.level("rhythm")
     _restart()
 
 func _restart() -> void:
-    beat_interval = maxf(0.49, 0.90 - (level - 1) * 0.07)
-    note_total = mini(48, 18 + (level - 1) * 6)
-    hit_window = maxf(0.19, 0.30 - (level - 1) * 0.018)
-    perfect_window = maxf(0.075, 0.13 - (level - 1) * 0.009)
+    beat_interval = maxf(0.52, 1.10 - (level - 1) * 0.09)
+    note_total = mini(48, 10 + (level - 1) * 4)
+    # Larger timing window for beginner levels; gently narrows as skill grows.
+    hit_window = maxf(0.18, 0.52 - (level - 1) * 0.065)
+    perfect_window = maxf(0.075, 0.22 - (level - 1) * 0.025)
     active_lanes = mini(4, 2 + int((level - 1) / 2.0))
-    travel_time = maxf(1.65, 2.2 - (level - 1) * 0.09)
+    travel_time = maxf(1.65, 2.4 - (level - 1) * 0.09)
     elapsed = 0.0
     score = 0
     combo = 0
@@ -95,18 +105,17 @@ func _restart() -> void:
     notes.clear()
     var lane := rng.randi_range(0, active_lanes - 1)
     for i in range(note_total):
-        if active_lanes > 1:
-            lane = (lane + rng.randi_range(1, active_lanes - 1)) % active_lanes
-        notes.append({"lane": lane, "time": 2.6 + i * beat_interval, "state": 0})
-    feedback.text = "LEVEL %d — Tap notes on the glowing line!" % level
+        # Level 1 teaches a predictable left/right rhythm.
+        # Later levels introduce changing lanes and repeated-note patterns.
+        if level == 1:
+            lane = i % 2
+        elif level == 2:
+            lane = int(i / 2) % 2
+        elif active_lanes > 1:
+            lane = rng.randi_range(0, active_lanes - 1)
+        notes.append({"lane": lane, "time": 2.6 + i * beat_interval, "state": 0, "pitch": MELODY[i % MELODY.size()]})
+    feedback.text = "LEVEL %d: Catch the notes to play a little tune!" % level
     _refresh()
-
-func _next_level() -> void:
-    if running:
-        feedback.text = "Finish this round to unlock the next level."
-        return
-    level += 1
-    _restart()
 
 func _process(delta: float) -> void:
     if not running:
@@ -120,8 +129,8 @@ func _process(delta: float) -> void:
             feedback.text = "MISS"
     if elapsed > float(notes.back()["time"]) + hit_window + 0.2:
         running = false
-        feedback.text = "LEVEL %d COMPLETE! %d HIT / %d MISSED — NEXT LEVEL!" % [level, hits, misses]
-        finished.emit("rhythm", score, {"coins": maxi(5, int(score / 100.0)), "xp": 40})
+        feedback.text = "ROUND FINISHED! %d HIT / %d MISSED" % [hits, misses]
+        finished.emit("rhythm", score, {"hits": hits, "misses": misses, "notes": note_total})
     _refresh()
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -158,8 +167,10 @@ func _hit(lane: int) -> void:
         feedback.text = "WAIT FOR THE LINE"
         return
     notes[candidate]["state"] = 1
-    if sound_enabled and lane < note_players.size():
-        note_players[lane].play()
+    # Each successful note plays its assigned musical pitch, forming a tune.
+    var pitch: int = int(notes[candidate]["pitch"])
+    if sound_enabled and pitch >= 0 and pitch < note_players.size():
+        note_players[pitch].play()
     hits += 1
     combo += 1
     var perfect: bool = distance < perfect_window
@@ -188,7 +199,14 @@ class BeatBoard extends Control:
             draw_rect(Rect2(left + 2, 0, lane_w - 4, h), Color(color.r, color.g, color.b, 0.09))
             draw_line(Vector2(left, 0), Vector2(left, h), Color("#65749e", 0.5), 2)
         var hit_y: float = h * 0.81
-        draw_rect(Rect2(0, hit_y - 5, w, 10), Color("#b8f9ff", 0.18))
+        # Draw the *actual* hittable area, derived from the same timing window
+        # used by _hit() and _process(). Early levels have a larger zone.
+        var zone_half_height: float = hit_y * game.hit_window / game.travel_time
+        var zone_top: float = maxf(0.0, hit_y - zone_half_height)
+        var zone_bottom: float = minf(h, hit_y + zone_half_height)
+        draw_rect(Rect2(0, zone_top, w, zone_bottom - zone_top), Color("#b8f9ff", 0.16))
+        draw_line(Vector2(0, zone_top), Vector2(w, zone_top), Color("#b8f9ff", 0.55), 2)
+        draw_line(Vector2(0, zone_bottom), Vector2(w, zone_bottom), Color("#b8f9ff", 0.55), 2)
         draw_line(Vector2(0, hit_y), Vector2(w, hit_y), Color("#b8f9ff"), 4)
         for note in game.notes:
             if int(note["state"]) != 0:

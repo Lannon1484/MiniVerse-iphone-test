@@ -147,7 +147,7 @@ func _restart() -> void:
     touch_active = false
     playing = true
     _spawn_food()
-    hint_label.text = "Swipe to turn. Collect stars and avoid walls!"
+    hint_label.text = "LEVEL %d  |  Swipe to turn and collect stars!" % difficulty_level
     _refresh()
     set_process(true)
 
@@ -155,7 +155,10 @@ func _process(delta: float) -> void:
     if not playing:
         return
     accumulator += minf(delta, 0.1)
-    var step_time: float = maxf(0.105, 0.245 - float(difficulty_level - 1) * 0.008 - float(eaten) * 0.004)
+    # Beginner levels leave more time to plan each turn. Speed grows
+    # gradually with collected stars and the unlocked level.
+    var starting_step: float = maxf(0.155, 0.30 - float(difficulty_level - 1) * 0.016)
+    var step_time: float = maxf(0.115, starting_step - float(eaten) * 0.0035)
     if accumulator >= step_time:
         accumulator -= step_time
         _step()
