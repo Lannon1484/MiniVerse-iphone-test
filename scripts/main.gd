@@ -124,11 +124,21 @@ func _shell():
     subtitle.add_theme_font_size_override("font_size", 10)
     subtitle.add_theme_color_override("font_color", MUTED)
     brand.add_child(subtitle)
+    var wallet_group := HBoxContainer.new()
+    wallet_group.alignment = BoxContainer.ALIGNMENT_END
+    wallet_group.add_theme_constant_override("separation", 5)
+    header.add_child(wallet_group)
+    var coin_icon := TextureRect.new()
+    coin_icon.texture = preload("res://assets/ui/coin.png")
+    coin_icon.custom_minimum_size = Vector2(27, 27)
+    coin_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    coin_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    wallet_group.add_child(coin_icon)
     var wallet := Label.new()
-    wallet.text = "🪙 %d" % coins
+    wallet.text = "%d" % coins
     wallet.add_theme_font_size_override("font_size", 18)
     wallet.add_theme_color_override("font_color", Color("#fcd34d"))
-    header.add_child(wallet)
+    wallet_group.add_child(wallet)
     var line := ColorRect.new()
     line.color = Color("#2a2f52")
     line.custom_minimum_size.y = 2
@@ -252,6 +262,7 @@ func _card(title: String, body: String) -> PanelContainer:
     return p
 
 func home():
+    Difficulty.clear_retry_level(game_id)
     _shell()
     # Mobile-first welcome panel with custom procedural fantasy artwork.
     var hero := PanelContainer.new()
@@ -425,6 +436,8 @@ func _random_game():
     launch(GAMES[rng.randi_range(0, GAMES.size()-1)].id)
 
 func launch(id: String):
+    if game_id != id:
+        Difficulty.clear_retry_level(game_id)
     _play_sound(SFX_START)
     game_id = id
     recent_games.erase(id)
@@ -553,35 +566,39 @@ func _daily_challenge():
     var challenge_ids := ["fast", "merge", "stack", "memory", "whack", "sort", "snake", "dots", "hopper", "rhythm"]
     launch(challenge_ids[day_key % challenge_ids.size()])
 
+# The first five levels use explicit achievable score goals. Later goals
+# increase gradually. Puzzle completion is its own success condition.
+func _level_goal(id: String, played_level: int) -> int:
+    var base_goals := {"fast": 45, "merge": 24, "stack": 3, "whack": 65, "snake": 3, "hopper": 3, "rhythm": 25}
+    var base: int = int(base_goals.get(id, 1))
+    return maxi(1, int(round(float(base) * (1.0 + 0.12 * float(played_level - 1)))))
+
 func _finished(id: String, score: int, extra: Dictionary = {}):
     var previous_best: int = int(best_scores.get(id, 0))
     var played_level: int = Difficulty.level(id)
-    # Some games handle their own Next Level progression; keep existing behavior.
-    Difficulty.complete(id)
-    var record := score > previous_best
-    # Stars measure the current run against the player's own previous best.
-    # First attempts earn a baseline rating; better runs can reach three stars.
+    var goal: int = _level_goal(id, played_level)
+    var puzzle_completion: bool = id in ["memory", "sort", "dots"]
+    var passed: bool = puzzle_completion or score >= goal
     var stars_earned: int = 1
-    if score > 0:
-        stars_earned = 2 if previous_best == 0 or score >= int(previous_best * 0.65) else 1
-        if previous_best > 0 and score >= int(previous_best * 1.1):
-            stars_earned = 3
+    if passed:
+        stars_earned = 3 if puzzle_completion or score >= int(ceil(float(goal) * 1.6)) else 2
+        Difficulty.complete(id)
+    var record: bool = score > previous_best
     best_stars[id] = maxi(int(best_stars.get(id, 0)), stars_earned)
     if record:
         best_scores[id] = score
-    # Capped rewards keep different games from inflating the economy.
-    var reward := clampi(5 + int(sqrt(float(maxi(score, 0))) * 1.8), 5, 75)
-    var earned_xp := clampi(10 + int(sqrt(float(maxi(score, 0))) * 2.5), 10, 110)
+    var reward: int = clampi(5 + int(sqrt(float(maxi(score, 0))) * 1.8), 5, 75)
+    var earned_xp: int = clampi(10 + int(sqrt(float(maxi(score, 0))) * 2.5), 10, 110)
     coins += reward
     xp += earned_xp
     level = int(xp / 100) + 1
     _save()
-    _play_sound(SFX_WIN)
-    _results(id, score, reward, record, earned_xp, stars_earned, played_level)
+    _play_sound(SFX_WIN if passed else SFX_OOPS)
+    _results(id, score, reward, record, earned_xp, stars_earned, played_level, goal, passed)
 
-func _results(id: String, score: int, reward: int, record: bool, earned_xp: int, stars_earned: int, played_level: int):
+func _results(id: String, score: int, reward: int, record: bool, earned_xp: int, stars_earned: int, played_level: int, goal: int, passed: bool):
     _shell()
-    _heading("Round Complete", "Every attempt makes you better.")
+    _heading("Level Complete!" if passed else "Try Again!", "Level %d • %s" % [played_level, "Goal reached!" if passed else "You can retry this level."])
     var celebration := PanelContainer.new()
     celebration.add_theme_stylebox_override("panel", _style(Color("#25234e"), 22))
     content.add_child(celebration)
@@ -595,13 +612,13 @@ func _results(id: String, score: int, reward: int, record: bool, earned_xp: int,
     stars.add_theme_color_override("font_color", Color("#ffdb78"))
     column.add_child(stars)
     var title := Label.new()
-    title.text = "NEW PERSONAL BEST!" if record else "NICE ROUND!"
+    title.text = "NEW PERSONAL BEST!" if record else ("LEVEL CLEARED!" if passed else "KEEP PRACTICING!")
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     title.add_theme_font_size_override("font_size", 23)
     title.add_theme_color_override("font_color", Color("#8eeaff") if record else TEXT)
     column.add_child(title)
     var result := Label.new()
-    result.text = "%s\n\nSCORE  %d\n\n+%d COINS     +%d XP" % [_game_name(id), score, reward, earned_xp]
+    result.text = "%s  •  LEVEL %d\n\nSCORE  %d  /  GOAL %d\n\n+%d COINS     +%d XP" % [_game_name(id), played_level, score, goal, reward, earned_xp]
     result.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     result.add_theme_font_size_override("font_size", 21)
     result.add_theme_color_override("font_color", TEXT)
@@ -617,9 +634,15 @@ func _results(id: String, score: int, reward: int, record: bool, earned_xp: int,
     confetti.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     confetti.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(confetti)
-    content.add_child(_button("NEXT LEVEL  →", func(): launch(id), ACCENT))
+    if passed:
+        content.add_child(_button("NEXT LEVEL  →", func(): launch(id), ACCENT))
+    content.add_child(_button("↻  RETRY LEVEL %d" % played_level, func(): _retry_level(id, played_level), PANEL2))
 
     content.add_child(_button("⌂  BACK TO MINIVERSE", home, PANEL2))
+
+func _retry_level(id: String, played_level: int) -> void:
+    Difficulty.set_retry_level(id, played_level)
+    launch(id)
 
 func _game_data(id: String) -> Dictionary:
     for g in GAMES:

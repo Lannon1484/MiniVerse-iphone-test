@@ -106,6 +106,9 @@ func _draw() -> void:
             draw_circle(Vector2(x - 3.0, y - 3.0), 3.0, Color.WHITE)
         draw_line(Vector2(0.0, h * 0.8), Vector2(w, h * 0.8), Color("#d9faff"), 4.0)
     elif game_id == "memory":
+        var memory_art: Texture2D = preload("res://assets/ui/memory_icon.png")
+        draw_texture_rect(memory_art, Rect2(Vector2.ZERO, size), false)
+        return
         # Four playful face-up cards with distinct symbols for Memory Match.
         var card_w: float = w * 0.28
         var card_h: float = h * 0.30
