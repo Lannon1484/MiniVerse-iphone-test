@@ -147,6 +147,15 @@ func _press(x: int,y: int):
     else:
         selected=p; status.text="Tiles must match and share an edge."
     _refresh()
+    # Early rounds have a reachable score target, rather than requiring the
+    # player to lose before they can advance.
+    var score_targets := [16, 32, 48, 72, 96]
+    var target: int = score_targets[mini(4, difficulty_level - 1)] if difficulty_level <= 5 else 96 + (difficulty_level - 5) * 24
+    if running and score >= target:
+        running = false
+        status.text = "LEVEL %d COMPLETE! Target %d reached!" % [difficulty_level, target]
+        finished.emit("merge", score, {"moves": moves})
+        return
     if not (adjacent and board[y][x] != 0):
         status.add_theme_color_override("font_color", Color("#aeb8df"))
     if _full() and not _has_merge():

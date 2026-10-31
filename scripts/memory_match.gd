@@ -56,7 +56,7 @@ func _build_ui() -> void:
     title.add_theme_color_override("font_color", Color("#d1fae5"))
     root.add_child(title)
     var subtitle := Label.new()
-    subtitle.text = "Match the colorful pictures! Find all 8 pairs."
+    subtitle.text = "Match the colorful pictures! Clear the pairs to unlock harder levels."
     subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     subtitle.add_theme_color_override("font_color", Color("#c4cbe8"))
@@ -131,7 +131,7 @@ func _new_round() -> void:
         claim_button.visible = false
     cards.clear(); buttons.clear(); matched.clear()
     first_pick = -1; lock_board = false; moves = 0; pairs_found = 0; score = 0; running = true
-    var pair_count: int = mini(8, 3 + difficulty_level)
+    var pair_count: int = mini(8, 2 + difficulty_level)
     for i in range(pair_count):
         var symbol: String = SYMBOLS[i]
         cards.append(symbol); cards.append(symbol)
@@ -166,7 +166,7 @@ func _new_round() -> void:
         status_label.text = "Memorize the pictures!"
         for i in range(buttons.size()):
             buttons[i].icon = PICTURES[cards[i]]
-        await get_tree().create_timer(4.0 if difficulty_level == 1 else 2.5).timeout
+        await get_tree().create_timer(4.5 if difficulty_level == 1 else (3.5 if difficulty_level == 2 else 2.0)).timeout
         if not is_inside_tree() or this_round != round_serial:
             return
         for i in range(buttons.size()):

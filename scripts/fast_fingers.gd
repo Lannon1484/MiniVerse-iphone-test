@@ -20,7 +20,8 @@ var rng := RandomNumberGenerator.new()
 func start_game():
     rng.randomize()
     difficulty_level = Difficulty.level("fast")
-    time_left = 25.0 if difficulty_level <= 3 else 20.0
+    var round_times := [25.0, 24.0, 23.0, 22.0, 20.0]
+    time_left = round_times[mini(difficulty_level, 5) - 1] if difficulty_level <= 5 else 20.0
     var root := VBoxContainer.new()
     root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.add_theme_constant_override("separation", 12)
@@ -32,14 +33,14 @@ func start_game():
     title.add_theme_font_size_override("font_size", 25)
     root.add_child(title)
     var desc := Label.new()
-    desc.text = "Tap as many targets as you can in 20 seconds."
+    desc.text = "Level %d: Hit the targets! %d seconds to score." % [difficulty_level, ceili(time_left)]
     desc.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     desc.add_theme_color_override("font_color", Color("#aeb8df"))
     desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     root.add_child(desc)
     var stats := HBoxContainer.new()
     root.add_child(stats)
-    timer_label = _stat("TIME 20")
+    timer_label = _stat("TIME %d" % ceili(time_left))
     score_label = _stat("SCORE 0")
     combo_label = _stat("COMBO 0")
     stats.add_child(timer_label); stats.add_child(score_label); stats.add_child(combo_label)
@@ -84,7 +85,8 @@ func _spawn():
     target.icon = TARGET_PICTURE
     target.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
     target.expand_icon = true
-    var target_size: float = maxf(58.0, 112.0 - float(difficulty_level - 1) * 3.0)
+    var early_sizes := [124.0, 112.0, 101.0, 92.0, 84.0]
+    var target_size: float = early_sizes[difficulty_level - 1] if difficulty_level <= 5 else maxf(58.0, 84.0 - float(difficulty_level - 5) * 2.0)
     target.custom_minimum_size = Vector2(target_size, target_size)
     target.add_theme_font_size_override("font_size",32)
     target.add_theme_color_override("font_color", Color("#17172b"))

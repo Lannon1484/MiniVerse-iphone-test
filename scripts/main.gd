@@ -416,7 +416,11 @@ func settings():
     _heading("Settings", "Local starter build settings.")
     _card("SAVE DATA", "Progress is stored on this device in Godot's user data folder.")
     content.add_child(_button("SOUND EFFECTS: ON" if sound_enabled else "SOUND EFFECTS: OFF", _toggle_sound, Color("#344a9b")))
-    content.add_child(_button("RESET LOCAL PROGRESS", reset_progress, Color("#f9738f")))
+    _card("LEVEL TESTING", "Reset a single game's level to 1 without losing coins, XP, or progress in other games.")
+    content.add_child(_button("RESET MEMORY MATCH LEVEL", func(): _reset_game_level("memory"), Color("#344a9b")))
+    content.add_child(_button("CHOOSE ANOTHER GAME TO RESET", _reset_level_menu, Color("#344a9b")))
+    content.add_child(_button("RESET ALL GAME LEVELS", _confirm_reset_levels, Color("#f9738f")))
+    content.add_child(_button("RESET LOCAL PROGRESS", _confirm_reset_progress, Color("#f9738f")))
     content.add_child(_button("← BACK TO HOME", home, PANEL2))
 
 func _toggle_sound() -> void:
@@ -424,11 +428,46 @@ func _toggle_sound() -> void:
     _save()
     settings()
 
+func _reset_game_level(id: String) -> void:
+    Difficulty.reset_game(id)
+    best_stars.erase(id)
+    _save()
+    settings()
+
+func _reset_level_menu() -> void:
+    _shell()
+    _heading("Reset a Game Level", "Only the selected game's level and stars will reset.")
+    for g in GAMES:
+        var id: String = str(g.id)
+        content.add_child(_button("%s  •  Level %d" % [str(g.title), Difficulty.level(id)], func(): _reset_game_level(id), Color("#344a9b")))
+    content.add_child(_button("← BACK TO SETTINGS", settings, PANEL2))
+
+func _confirm_reset_levels() -> void:
+    _shell()
+    _heading("Reset All Levels?", "All ten games return to Level 1. Coins, XP and high scores stay.")
+    content.add_child(_button("YES, RESET ALL LEVELS", _reset_all_levels, Color("#f9738f")))
+    content.add_child(_button("CANCEL", settings, PANEL2))
+
+func _reset_all_levels() -> void:
+    Difficulty.reset_all()
+    best_stars.clear()
+    _save()
+    settings()
+
+func _confirm_reset_progress() -> void:
+    _shell()
+    _heading("Erase Local Progress?", "This will clear coins, XP, scores, stars and all game levels.")
+    content.add_child(_button("YES, ERASE EVERYTHING", reset_progress, Color("#f9738f")))
+    content.add_child(_button("CANCEL", settings, PANEL2))
+
 func reset_progress():
     coins = 0
     xp = 0
     level = 1
     best_scores = {}
+    best_stars = {}
+    recent_games.clear()
+    Difficulty.reset_all()
     _save()
     settings()
 
@@ -569,9 +608,19 @@ func _daily_challenge():
 # The first five levels use explicit achievable score goals. Later goals
 # increase gradually. Puzzle completion is its own success condition.
 func _level_goal(id: String, played_level: int) -> int:
-    var base_goals := {"fast": 45, "merge": 24, "stack": 3, "whack": 65, "snake": 3, "hopper": 3, "rhythm": 25}
+    # Hand-balanced introductory goals for the three reflex/timing games.
+    var first_five := {
+        "fast": [30, 50, 75, 105, 135],
+        "stack": [2, 3, 4, 5, 6],
+        "whack": [35, 50, 65, 85, 105],
+        "merge": [16, 32, 48, 72, 96]
+    }
+    if first_five.has(id) and played_level <= 5:
+        return int(first_five[id][played_level - 1])
+    var base_goals := {"fast": 135, "merge": 24, "stack": 6, "whack": 105, "snake": 3, "hopper": 3, "rhythm": 25}
     var base: int = int(base_goals.get(id, 1))
-    return maxi(1, int(round(float(base) * (1.0 + 0.12 * float(played_level - 1)))))
+    var step: int = maxi(0, played_level - (5 if first_five.has(id) else 1))
+    return maxi(1, int(round(float(base) * (1.0 + 0.10 * float(step)))))
 
 func _finished(id: String, score: int, extra: Dictionary = {}):
     var previous_best: int = int(best_scores.get(id, 0))

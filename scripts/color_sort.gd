@@ -118,12 +118,18 @@ func _new_game() -> void:
     for color_id in range(4):
         for j in range(CAPACITY):
             pieces.append(color_id)
-    pieces.shuffle()
-    if difficulty_level <= 2:
-        # Two already-sorted colors make the first puzzle easier to understand.
-        pieces = [0, 0, 0, 0, 1, 1, 1, 1] + [2, 3, 2, 3, 2, 3, 2, 3]
-    elif difficulty_level <= 4:
-        pieces = [0, 0, 0, 0] + pieces.slice(4)
+    # Curated first-five layouts. Start with two mixed colors, then three,
+    # then all four. The two spare tubes make each layout recoverable.
+    if difficulty_level == 1:
+        pieces = [0, 1, 0, 1, 1, 0, 1, 0, 2, 2, 2, 2, 3, 3, 3, 3]
+    elif difficulty_level == 2:
+        pieces = [0, 1, 0, 1, 1, 2, 1, 2, 2, 0, 2, 0, 3, 3, 3, 3]
+    elif difficulty_level == 3:
+        pieces = [0, 1, 2, 0, 1, 2, 0, 1, 2, 0, 1, 2, 3, 3, 3, 3]
+    elif difficulty_level == 4:
+        pieces = [0, 1, 2, 3, 1, 2, 3, 0, 2, 3, 0, 1, 3, 0, 1, 2]
+    else:
+        pieces.shuffle()
     for i in range(4):
         var tube: Array[int] = []
         for j in range(CAPACITY):
@@ -131,7 +137,7 @@ func _new_game() -> void:
         tubes.append(tube)
     tubes.append([])
     tubes.append([])
-    status.text = "Sort the colors! Select a tube to begin."
+    status.text = "LEVEL %d • Sort the colors! Select a tube to begin." % difficulty_level
     _refresh()
 
 func _pick(index: int) -> void:

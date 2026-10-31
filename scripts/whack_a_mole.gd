@@ -191,8 +191,10 @@ func _process(delta: float) -> void:
 
 func _spawn() -> void:
     active_slot = rng.randi_range(0, 8)
-    active_decoy = rng.randf() < minf(0.29, 0.06 + float(difficulty_level - 1) * 0.015)
-    visible_for = maxf(0.70, 1.85 - float(difficulty_level - 1) * 0.065 - float(hits) * 0.009)
+    var early_snakes := [0.0, 0.04, 0.07, 0.10, 0.13]
+    active_decoy = rng.randf() < (early_snakes[difficulty_level - 1] if difficulty_level <= 5 else minf(0.29, 0.13 + float(difficulty_level - 5) * 0.015))
+    var first_five_visibility := [2.0, 1.85, 1.7, 1.55, 1.4]
+    visible_for = maxf(0.70, first_five_visibility[difficulty_level - 1] - float(hits) * 0.008) if difficulty_level <= 5 else maxf(0.70, 1.4 - float(difficulty_level - 5) * 0.05 - float(hits) * 0.009)
     var b := slots[active_slot]
     b.text = ""
     b.icon = SNAKE_IMAGE if active_decoy else MOLE_IMAGE

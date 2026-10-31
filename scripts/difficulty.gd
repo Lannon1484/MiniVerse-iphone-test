@@ -23,3 +23,19 @@ static func complete(game_id: String) -> void:
     var count: int = int(cfg.get_value("completed", game_id, 0))
     cfg.set_value("completed", game_id, mini(count + 1, 19))
     cfg.save(SAVE)
+
+
+static func reset_game(game_id: String) -> void:
+    retry_levels.erase(game_id)
+    var cfg := ConfigFile.new()
+    cfg.load(SAVE)
+    cfg.set_value("completed", game_id, 0)
+    cfg.save(SAVE)
+
+static func reset_all() -> void:
+    retry_levels.clear()
+    var cfg := ConfigFile.new()
+    cfg.load(SAVE)
+    if cfg.has_section("completed"):
+        cfg.erase_section("completed")
+    cfg.save(SAVE)
