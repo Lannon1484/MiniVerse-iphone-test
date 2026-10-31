@@ -47,6 +47,14 @@ func _draw() -> void:
             var font := ThemeDB.fallback_font
             if font:
                 draw_string(font, pos + Vector2(cell * 0.18, cell * 0.68), values[i], HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(10, int(cell * 0.45)), Color("#17172b"))
+    elif game_id == "hopper":
+        draw_circle(Vector2(w * 0.52, h * 0.34), minf(w, h) * 0.16, Color("#ffdc8a"))
+        for i in range(3):
+            var x: float = w * (0.12 + 0.32 * i)
+            var y: float = h * (0.74 - 0.18 * (i % 2))
+            draw_rect(Rect2(x, y, w * 0.25, h * 0.10), Color("#65dcb0"), true)
+            draw_rect(Rect2(x + w * 0.03, y + h * 0.10, w * 0.19, h * 0.07), Color("#8e6cb9"), true)
+        draw_circle(Vector2(w * 0.55, h * 0.45), minf(w, h) * 0.09, Color("#fcb4e9"))
     elif game_id == "dots":
         var points: Array[Vector2] = [Vector2(w * 0.22, h * 0.24), Vector2(w * 0.78, h * 0.24), Vector2(w * 0.22, h * 0.72), Vector2(w * 0.78, h * 0.72)]
         draw_line(points[0], points[1], Color("#ff79b2"), 11.0, true)

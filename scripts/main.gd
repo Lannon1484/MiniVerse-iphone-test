@@ -16,6 +16,7 @@ const WhackAMole = preload("res://scripts/whack_a_mole.gd")
 const ColorSort = preload("res://scripts/color_sort.gd")
 const NeonSnake = preload("res://scripts/neon_snake.gd")
 const ConnectDots = preload("res://scripts/connect_dots.gd")
+const SkyHopper = preload("res://scripts/sky_hopper.gd")
 const GAMES := [
     {"id":"fast","title":"Fast Fingers","genre":"REFLEX ARCADE","desc":"Tap targets before time runs out.","color":Color("#f9738f")},
     {"id":"merge","title":"Number Merge","genre":"PUZZLE","desc":"Merge matching tiles to reach bigger numbers.","color":Color("#60a5fa")},
@@ -24,7 +25,8 @@ const GAMES := [
     {"id":"whack","title":"Whack-a-Mole","genre":"REFLEX ARCADE","desc":"Whack moles, avoid snakes!","color":Color("#38d9b4")},
     {"id":"sort","title":"Color Sort","genre":"RELAXING PUZZLE","desc":"Pour colorful liquids into matching tubes.","color":Color("#c084fc")},
     {"id":"snake","title":"Neon Snake","genre":"ARCADE","desc":"Collect glowing stars and grow your snake.","color":Color("#58edc4")},
-    {"id":"dots","title":"Connect the Dots","genre":"PUZZLE","desc":"Draw glowing paths between matching colors.","color":Color("#ff79b2")}
+    {"id":"dots","title":"Connect the Dots","genre":"PUZZLE","desc":"Draw glowing paths between matching colors.","color":Color("#ff79b2")},
+    {"id":"hopper","title":"Sky Hopper","genre":"ARCADE PLATFORMER","desc":"Hop between floating islands and collect stars.","color":Color("#9bd8ff")}
 ]
 
 var content: VBoxContainer
@@ -329,7 +331,7 @@ func events():
     _shell()
     _heading("Challenges & Events", "Event previews for the growing MiniVerse.")
     var day_key := int(Time.get_unix_time_from_system() / 86400.0)
-    var challenge_ids := ["fast", "merge", "stack", "memory", "whack", "sort", "snake"]
+    var challenge_ids := ["fast", "merge", "stack", "memory", "whack", "sort", "snake", "dots", "hopper"]
     var challenge_id: String = challenge_ids[day_key % challenge_ids.size()]
     _card("☀ DAILY DASH", "Today's featured game: %s. Finish a round to earn coins and XP." % _game_name(challenge_id))
     content.add_child(_button("▶  PLAY DAILY CHALLENGE", _daily_challenge, Color("#fbbf24")))
@@ -371,6 +373,7 @@ func launch(id: String):
         "sort": _play_sort()
         "snake": _play_snake()
         "dots": _play_dots()
+        "hopper": _play_hopper()
 
 func _mount_game(g: Control):
     _shell()
@@ -436,10 +439,16 @@ func _play_dots():
     _mount_game(g)
     g.start_game()
 
+func _play_hopper():
+    var g := SkyHopper.new()
+    g.finished.connect(_finished)
+    _mount_game(g)
+    g.start_game()
+
 func _daily_challenge():
     # Local daily rotation; does not require an online backend.
     var day_key := int(Time.get_unix_time_from_system() / 86400.0)
-    var challenge_ids := ["fast", "merge", "stack", "memory", "whack", "sort", "snake"]
+    var challenge_ids := ["fast", "merge", "stack", "memory", "whack", "sort", "snake", "dots", "hopper"]
     launch(challenge_ids[day_key % challenge_ids.size()])
 
 func _finished(id: String, score: int, extra: Dictionary = {}):
