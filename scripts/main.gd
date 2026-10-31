@@ -28,6 +28,8 @@ const GAMES := [
 ]
 
 var content: VBoxContainer
+var lobby_scroll: ScrollContainer
+var lobby_touch_scrolling := true
 var coins := 0
 var xp := 0
 var level := 1
@@ -43,7 +45,17 @@ func _ready():
     _shell()
     home()
 
+func _input(event: InputEvent) -> void:
+    # Handle finger swipes globally while browsing the lobby/library, even when
+    # a child button, artwork or card captures the touch event.
+    if not lobby_touch_scrolling or not is_instance_valid(lobby_scroll):
+        return
+    if event is InputEventScreenDrag:
+        lobby_scroll.scroll_vertical -= int(event.relative.y)
+        get_viewport().set_input_as_handled()
+
 func _shell():
+    lobby_touch_scrolling = true
     for c in get_children():
         c.queue_free()
     var bg := ColorRect.new()
@@ -102,9 +114,12 @@ func _shell():
     var scroll := ScrollContainer.new()
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-    scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
-    # Small drag threshold makes finger swipes start scrolling promptly.
-    scroll.scroll_deadzone = 6
+    # Hide the skinny scrollbar; the entire content area is swipeable.
+    scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
+    # Global finger-drag handling prevents buttons and cards blocking swipes.
+    scroll.scroll_deadzone = 0
+    scroll.touch_scroll_enabled = false
+    lobby_scroll = scroll
     root.add_child(scroll)
     content = VBoxContainer.new()
     content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -360,6 +375,7 @@ func launch(id: String):
 
 func _mount_game(g: Control):
     _shell()
+    lobby_touch_scrolling = false
     game_root = g
     # Keep a visible way back to the lobby while playing any mini-game.
     content.add_child(_button("←  RETURN TO LOBBY", home, PANEL2, 46))
