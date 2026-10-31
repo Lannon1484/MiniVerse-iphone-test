@@ -17,6 +17,9 @@ var eaten: int = 0
 var playing: bool = false
 var accumulator: float = 0.0
 var touch_start: Vector2 = Vector2.ZERO
+var swipe_anchor: Vector2 = Vector2.ZERO
+var touch_active: bool = false
+var queued_turns: Array[Vector2i] = []
 var rng := RandomNumberGenerator.new()
 var score_label: Label
 var hint_label: Label
@@ -62,21 +65,29 @@ func _build_ui() -> void:
     controls.columns = 3
     controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     root.add_child(controls)
-    # Single compact directional pad; no redundant arrow row.
-    _add_control(controls, "◀", Vector2i.LEFT)
+    # Familiar D-pad arrangement: up above left/down/right.
+    _add_spacer(controls)
     _add_control(controls, "▲", Vector2i.UP)
-    _add_control(controls, "▶", Vector2i.RIGHT)
+    _add_spacer(controls)
+    _add_control(controls, "◀", Vector2i.LEFT)
     _add_control(controls, "▼", Vector2i.DOWN)
+    _add_control(controls, "▶", Vector2i.RIGHT)
     var restart := Button.new()
     restart.text = "↻  NEW RUN"
     restart.custom_minimum_size.y = 46
     restart.pressed.connect(_restart)
     root.add_child(restart)
 
+func _add_spacer(parent: GridContainer) -> void:
+    var spacer := Control.new()
+    spacer.custom_minimum_size = Vector2(0, 52)
+    spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    parent.add_child(spacer)
+
 func _add_control(parent: GridContainer, label_text: String, heading: Vector2i) -> void:
     var b := Button.new()
     b.text = label_text
-    b.custom_minimum_size = Vector2(0, 44)
+    b.custom_minimum_size = Vector2(0, 52)
     b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     b.pressed.connect(_steer.bind(heading))
     parent.add_child(b)
@@ -91,6 +102,8 @@ func _restart() -> void:
     score = 0
     eaten = 0
     accumulator = 0.0
+    queued_turns.clear()
+    touch_active = false
     playing = true
     _spawn_food()
     hint_label.text = "Swipe to turn. Collect stars and avoid walls!"
@@ -101,12 +114,14 @@ func _process(delta: float) -> void:
     if not playing:
         return
     accumulator += minf(delta, 0.1)
-    var step_time: float = maxf(0.105, 0.25 - float(eaten) * 0.008)
+    var step_time: float = maxf(0.095, 0.19 - float(eaten) * 0.006)
     if accumulator >= step_time:
         accumulator -= step_time
         _step()
 
 func _step() -> void:
+    if not queued_turns.is_empty():
+        next_direction = queued_turns.pop_front()
     direction = next_direction
     var head: Vector2i = snake[0] + direction
     if head.x < 0 or head.y < 0 or head.x >= GRID_SIZE or head.y >= GRID_SIZE:
@@ -143,28 +158,44 @@ func _spawn_food() -> void:
 func _steer(heading: Vector2i) -> void:
     if not playing:
         return
-    if heading + direction != Vector2i.ZERO:
-        next_direction = heading
+    # Queue up to two turns, so quick gestures are not lost between ticks.
+    var previous: Vector2i = queued_turns.back() if not queued_turns.is_empty() else next_direction
+    if heading == previous or heading + previous == Vector2i.ZERO:
+        return
+    if queued_turns.size() < 2:
+        queued_turns.append(heading)
 
 func _board_input(event: InputEvent) -> void:
     if event is InputEventScreenTouch:
         if event.pressed:
-            touch_start = event.position
+            touch_active = true
+            swipe_anchor = event.position
         else:
-            _swipe(event.position - touch_start)
+            if touch_active:
+                _consume_swipe(event.position)
+            touch_active = false
+    elif event is InputEventScreenDrag and touch_active:
+        _consume_swipe(event.position)
     elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
         if event.pressed:
-            touch_start = event.position
+            touch_active = true
+            swipe_anchor = event.position
         else:
-            _swipe(event.position - touch_start)
+            if touch_active:
+                _consume_swipe(event.position)
+            touch_active = false
+    elif event is InputEventMouseMotion and touch_active:
+        _consume_swipe(event.position)
 
-func _swipe(vector: Vector2) -> void:
-    if vector.length() < 22.0:
+func _consume_swipe(position: Vector2) -> void:
+    var vector: Vector2 = position - swipe_anchor
+    if vector.length() < 16.0:
         return
     if absf(vector.x) > absf(vector.y):
         _steer(Vector2i.RIGHT if vector.x > 0.0 else Vector2i.LEFT)
     else:
         _steer(Vector2i.DOWN if vector.y > 0.0 else Vector2i.UP)
+    swipe_anchor = position
 
 func _unhandled_key_input(event: InputEvent) -> void:
     if not event is InputEventKey or not event.pressed:
