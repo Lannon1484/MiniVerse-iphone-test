@@ -102,6 +102,16 @@ const SHOP_EFFECTS := [
 ]
 # Daily missions are generated from the device's local calendar date.
 # Only rounds finished today count toward today's missions.
+var daily_feature_active := false
+var daily_feature_game := ""
+var daily_feature_day := ""
+var daily_feature_notice := ""
+# Daily featured-game bonus is awarded only once per local calendar date.
+var daily_feature_reward_day := ""
+# Up to 30 calendar days of featured-game participation, stored locally.
+var daily_feature_history: Dictionary = {}
+const DAILY_FEATURE_COINS := 60
+const DAILY_FEATURE_XP := 15
 var mission_day := ""
 var mission_progress: Dictionary = {}
 var mission_claimed: Dictionary = {}
@@ -863,9 +873,9 @@ func _profile_progress_panel() -> void:
     title_label.add_theme_color_override("font_color", _menu_accent_text(_theme_color()))
     stack.add_child(title_label)
 
-    var current_xp: int = xp % 100
+    var current_xp: int = _level_xp_progress()
     var progress_label := Label.new()
-    progress_label.text = "LEVEL %d  |  %d / 100 XP to level %d" % [level, current_xp, level + 1]
+    progress_label.text = "LEVEL %d  |  %d / %d XP to level %d" % [level, current_xp, _xp_to_next_level(level), level + 1]
     progress_label.add_theme_font_size_override("font_size", 19)
     progress_label.add_theme_color_override("font_color", Color("#e4eaff"))
     progress_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -874,7 +884,7 @@ func _profile_progress_panel() -> void:
     var xp_bar := ProgressBar.new()
     xp_bar.custom_minimum_size = Vector2(0, 24)
     xp_bar.min_value = 0
-    xp_bar.max_value = 100
+    xp_bar.max_value = _xp_to_next_level(level)
     xp_bar.value = current_xp
     xp_bar.show_percentage = false
     stack.add_child(xp_bar)
@@ -1094,15 +1104,15 @@ func home():
     lobby_rank.add_theme_color_override("font_color", Color("#ffe29e"))
     identity_text.add_child(lobby_rank)
     var lobby_xp := Label.new()
-    lobby_xp.text = "%d / 100 XP TO LEVEL %d" % [xp % 100, level + 1]
+    lobby_xp.text = "%d / %d XP TO LEVEL %d" % [_level_xp_progress(), _xp_to_next_level(level), level + 1]
     lobby_xp.add_theme_font_size_override("font_size", 18)
     lobby_xp.add_theme_color_override("font_color", Color("#e4eaff"))
     lobby_stack.add_child(lobby_xp)
     var lobby_xp_bar := ProgressBar.new()
     lobby_xp_bar.custom_minimum_size = Vector2(0, 22)
     lobby_xp_bar.min_value = 0
-    lobby_xp_bar.max_value = 100
-    lobby_xp_bar.value = xp % 100
+    lobby_xp_bar.max_value = _xp_to_next_level(level)
+    lobby_xp_bar.value = _level_xp_progress()
     lobby_xp_bar.show_percentage = false
     lobby_stack.add_child(lobby_xp_bar)
     var next_rank := Label.new()
@@ -1118,6 +1128,8 @@ func home():
     content.add_child(quick_actions)
     quick_actions.add_child(_menu_button("DAILY", _daily_challenge, Color("#fbbf24"), "daily", 54))
     quick_actions.add_child(_menu_button("MISSIONS", daily_missions, Color("#344a9b"), "missions", 54))
+    _card("TODAY'S FEATURED GAME", _daily_feature_description())
+    content.add_child(_button("VIEW DAILY GAME HISTORY", daily_game_history, Color("#344a9b"), 52))
     _heading("Recently Played", "Your last three games, ready to jump back into.")
     var shown := 0
     for recent_id in recent_games:
@@ -1228,11 +1240,8 @@ func _matches_filter(g: Dictionary, category: String) -> bool:
 func events():
     _shell()
     _heading("Challenges & Events", "Event previews for the growing MiniVerse.")
-    var day_key := int(Time.get_unix_time_from_system() / 86400.0)
-    var challenge_ids := ["fast", "merge", "stack", "memory", "whack", "sort", "snake", "dots", "hopper", "rhythm"]
-    var challenge_id: String = challenge_ids[day_key % challenge_ids.size()]
-    _card("☀ DAILY DASH", "Today's featured game: %s. Finish a round to earn coins and XP." % _game_name(challenge_id))
-    content.add_child(_button("▶  PLAY DAILY CHALLENGE", _daily_challenge, Color("#fbbf24")))
+    _card("DAILY DASH", _daily_feature_description())
+    content.add_child(_button("PLAY TODAY'S FEATURED GAME", _daily_challenge, Color("#fbbf24")))
     _card("🏆 MINIVERSE CUP", "Weekly score competitions will rotate between mini-games after an online backend is added.")
     _card("✦ MINIVERSE FESTIVAL", "Seasonal themes, cosmetic rewards, and special games are planned for future versions.")
     content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "back"))
@@ -1285,7 +1294,7 @@ func _award_achievements() -> void:
             coins += int(item["coins"])
             xp += int(item["xp"])
             achievement_new.append(str(item["title"]))
-    level = int(xp / 100) + 1
+    level = _level_from_xp(xp)
 
 func achievements() -> void:
     _shell()
@@ -1918,7 +1927,7 @@ func _login_claim() -> void:
     var xp_earned: int = xp_rewards[day_index]
     coins += coins_earned
     xp += xp_earned
-    level = int(xp / 100) + 1
+    level = _level_from_xp(xp)
     login_last_claim = today
     login_total_claims += 1
     login_notice = "Day %d reward claimed: +%d coins and +%d XP!" % [login_streak, coins_earned, xp_earned]
@@ -1999,7 +2008,7 @@ func _weekly_claim(key: String) -> void:
         weekly_claimed[key] = true
         coins += int(challenge["coins"])
         xp += int(challenge["xp"])
-        level = int(xp / 100) + 1
+        level = _level_from_xp(xp)
         weekly_notice = "Claimed %s: +%d coins and +%d XP!" % [str(challenge["title"]), int(challenge["coins"]), int(challenge["xp"])]
         _play_sound(SFX_COLLECT)
         _save()
@@ -2090,7 +2099,7 @@ func _challenge_streak_reward() -> void:
     var xp_earned: int = mini(30 * challenge_streak, 210)
     coins += coins_earned
     xp += xp_earned
-    level = int(xp / 100) + 1
+    level = _level_from_xp(xp)
     challenge_streak_notice = "Day %d streak complete! +%d coins and +%d XP." % [challenge_streak, coins_earned, xp_earned]
     _play_sound(SFX_COLLECT)
 
@@ -2105,7 +2114,7 @@ func _mission_claim(key: String) -> void:
         mission_claimed[key] = true
         coins += int(mission["coins"])
         xp += int(mission["xp"])
-        level = int(xp / 100) + 1
+        level = _level_from_xp(xp)
         mission_notice = "Claimed %s: +%d coins and +%d XP!" % [str(mission["title"]), int(mission["coins"]), int(mission["xp"])]
         _challenge_streak_reward()
         _play_sound(SFX_COLLECT)
@@ -2151,11 +2160,70 @@ func daily_missions() -> void:
     content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "back"))
 
 
+func _record_daily_feature_history(id: String, score: int, completed: bool, day: String) -> void:
+    var entry: Dictionary = daily_feature_history.get(day, {})
+    if entry.is_empty():
+        entry = {"game": id, "attempts": 0, "best": 0, "completed": false}
+    entry["attempts"] = int(entry.get("attempts", 0)) + 1
+    entry["best"] = maxi(int(entry.get("best", 0)), score)
+    entry["completed"] = bool(entry.get("completed", false)) or completed
+    daily_feature_history[day] = entry
+    var dates: Array = daily_feature_history.keys()
+    dates.sort()
+    while dates.size() > 30:
+        daily_feature_history.erase(str(dates.pop_front()))
+
+
+func daily_game_history() -> void:
+    _shell()
+    _heading("Daily Game History", "Your last 30 featured-game days, saved on this device.")
+    var dates: Array = daily_feature_history.keys()
+    dates.sort()
+    dates.reverse()
+    var completed_days: int = 0
+    var total_attempts: int = 0
+    for date in dates:
+        var entry: Dictionary = daily_feature_history[date]
+        total_attempts += int(entry.get("attempts", 0))
+        if bool(entry.get("completed", false)):
+            completed_days += 1
+    _card("YOUR DAILY DASH RECORD", "Days participated: %d\\nChallenges completed: %d\\nTotal featured-game attempts: %d" % [dates.size(), completed_days, total_attempts])
+    if dates.is_empty():
+        _card("NO DAILY GAMES YET", "Play today's featured game from the lobby to start your history.")
+    else:
+        for date in dates:
+            var entry: Dictionary = daily_feature_history[date]
+            var status: String = "COMPLETED" if bool(entry.get("completed", false)) else "IN PROGRESS"
+            _card(str(date) + "  -  " + status, "%s\\nAttempts: %d  |  Best score: %d" % [_game_name(str(entry.get("game", ""))), int(entry.get("attempts", 0)), int(entry.get("best", 0))])
+    content.add_child(_button("BACK TO LOBBY", home, Color("#344a9b"), 54))
+
+
+func _daily_feature() -> Dictionary:
+    # Stable per local calendar day, including across restarts.
+    # Rotates through every game before repeating the same game.
+    var date_string: String = Time.get_date_string_from_system()
+    var day_number: int = int(Time.get_unix_time_from_datetime_string(date_string + "T12:00:00") / 86400.0)
+    var index: int = posmod(day_number, MISSION_GAMES.size())
+    var featured_id: String = str(MISSION_GAMES[index])
+    var mode: int = posmod(int(day_number / MISSION_GAMES.size()), 2)
+    return {"date": date_string, "id": featured_id, "mode": mode}
+
+
+func _daily_feature_description() -> String:
+    var feature: Dictionary = _daily_feature()
+    var condition: String = "Clear a level" if int(feature["mode"]) == 1 else "Finish one round"
+    var claimed: bool = daily_feature_reward_day == str(feature["date"])
+    var status: String = "BONUS CLAIMED TODAY" if claimed else "First completion: +%d coins and +%d XP" % [DAILY_FEATURE_COINS, DAILY_FEATURE_XP]
+    return "%s\nToday's objective: %s.\n%s\nNew featured game tomorrow." % [_game_name(str(feature["id"])), condition, status]
+
+
 func _daily_challenge():
-    # Local daily rotation; does not require an online backend.
-    var day_key := int(Time.get_unix_time_from_system() / 86400.0)
-    var challenge_ids := ["fast", "merge", "stack", "memory", "whack", "sort", "snake", "dots", "hopper", "rhythm"]
-    launch(challenge_ids[day_key % challenge_ids.size()])
+    var feature: Dictionary = _daily_feature()
+    daily_feature_active = true
+    daily_feature_game = str(feature["id"])
+    daily_feature_day = str(feature["date"])
+    daily_feature_notice = ""
+    launch(daily_feature_game)
 
 # The first five levels use explicit achievable score goals. Later goals
 # increase gradually. Puzzle completion is its own success condition.
@@ -2201,6 +2269,24 @@ func _finished(id: String, score: int, extra: Dictionary = {}):
     _award_achievements()
     _mission_record(id, passed)
     _weekly_record(id, passed)
+    if daily_feature_active:
+        var feature: Dictionary = _daily_feature()
+        if id == daily_feature_game and daily_feature_day == str(feature["date"]):
+            var completed: bool = int(feature["mode"]) == 0 or passed
+            _record_daily_feature_history(id, score, completed, daily_feature_day)
+            if completed:
+                if daily_feature_reward_day != str(feature["date"]):
+                    daily_feature_reward_day = str(feature["date"])
+                    coins += DAILY_FEATURE_COINS
+                    xp += DAILY_FEATURE_XP
+                    daily_feature_notice = "DAILY BONUS EARNED! +%d coins and +%d XP. Come back tomorrow for another bonus!" % [DAILY_FEATURE_COINS, DAILY_FEATURE_XP]
+                else:
+                    daily_feature_notice = "FEATURED OBJECTIVE COMPLETE! Today's bonus has already been collected."
+            else:
+                daily_feature_notice = "Today's featured objective: clear the level to complete it."
+        daily_feature_active = false
+        daily_feature_game = ""
+        daily_feature_day = ""
     _save()
     _play_sound(SFX_WIN if passed else SFX_OOPS)
     _results(id, score, reward, record, earned_xp, stars_earned, played_level, goal, passed)
@@ -2226,6 +2312,9 @@ func _play_completed_rhythm_song(played_level: int) -> void:
 func _results(id: String, score: int, reward: int, record: bool, earned_xp: int, stars_earned: int, played_level: int, goal: int, passed: bool):
     _shell()
     _heading("Level Complete!" if passed else "Try Again!", "Level %d • %s" % [played_level, "Goal reached!" if passed else "You can retry this level."])
+    if daily_feature_notice != "":
+        _card("DAILY DASH", daily_feature_notice)
+        daily_feature_notice = ""
     if level_up_notice != "":
         _card("NEW PLAYER LEVEL!", level_up_notice)
         level_up_notice = ""
@@ -2361,11 +2450,30 @@ func _grant_milestone_cosmetics(show_notice: bool = false) -> void:
         level_up_notice += "\nExclusive theme unlocked: " + names + "! Find it in Shop > Themes."
 
 
+# Increasing XP requirements keep early levels approachable without letting
+# one unusually high score skip most of the early progression.
+func _xp_for_level(player_level: int) -> int:
+    var completed: int = maxi(0, player_level - 1)
+    return 200 * completed + 50 * completed * (completed - 1) / 2
+
+func _xp_to_next_level(player_level: int) -> int:
+    return 200 + 50 * maxi(0, player_level - 1)
+
+func _level_from_xp(total_xp: int) -> int:
+    var result: int = 1
+    while total_xp >= _xp_for_level(result + 1):
+        result += 1
+    return result
+
+func _level_xp_progress() -> int:
+    return maxi(0, xp - _xp_for_level(level))
+
+
 func _apply_level_rewards() -> void:
     # This runs before each save, after gameplay or claimed XP changes.
     # Existing players are baselined at their saved level when first loading
     # this feature, so old progress is never rewarded twice.
-    var actual_level: int = maxi(1, int(xp / 100) + 1)
+    var actual_level: int = maxi(1, _level_from_xp(xp))
     level = actual_level
     if actual_level <= last_rewarded_level:
         return
@@ -2384,7 +2492,7 @@ func _save():
     _grant_milestone_cosmetics()
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"last_rewarded_level":last_rewarded_level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"xp_curve_version":2,"last_rewarded_level":last_rewarded_level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day,"daily_feature_reward_day":daily_feature_reward_day,"daily_feature_history":daily_feature_history}))
         f.close()
 
 func _load_save():
@@ -2394,6 +2502,10 @@ func _load_save():
     var data = JSON.parse_string(f.get_as_text())
     f.close()
     if typeof(data) == TYPE_DICTIONARY:
+        daily_feature_reward_day = str(data.get("daily_feature_reward_day", ""))
+        daily_feature_history = data.get("daily_feature_history", {})
+        if typeof(daily_feature_history) != TYPE_DICTIONARY:
+            daily_feature_history = {}
         login_last_claim = str(data.get("login_last_claim", ""))
         login_streak = int(data.get("login_streak", 0))
         login_total_claims = int(data.get("login_total_claims", 0))
@@ -2413,6 +2525,10 @@ func _load_save():
         coins = int(data.get("coins",0))
         xp = int(data.get("xp",0))
         level = int(data.get("level",1))
+        if int(data.get("xp_curve_version", 1)) < 2:
+            var old_level: int = maxi(1, level)
+            var old_progress: int = clampi(xp - 100 * (old_level - 1), 0, 99)
+            xp = _xp_for_level(old_level) + int(round(float(old_progress) * float(_xp_to_next_level(old_level)) / 100.0))
         last_rewarded_level = int(data.get("last_rewarded_level", level))
         last_rewarded_level = maxi(1, last_rewarded_level)
         best_scores = data.get("best_scores",{})
