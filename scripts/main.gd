@@ -171,7 +171,7 @@ func _bottom_navigation(root: VBoxContainer) -> void:
     separator.custom_minimum_size.y = 2
     root.add_child(separator)
     var bar := HBoxContainer.new()
-    bar.custom_minimum_size.y = 76
+    bar.custom_minimum_size.y = 90
     bar.add_theme_constant_override("separation", 3)
     root.add_child(bar)
     for item in [
@@ -189,14 +189,16 @@ func _bottom_navigation(root: VBoxContainer) -> void:
         button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
         button.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
         button.expand_icon = true
-        button.add_theme_constant_override("icon_max_width", 24)
-        button.add_theme_font_size_override("font_size", 11)
-        button.add_theme_color_override("font_color", TEXT if selected else MUTED)
+        button.add_theme_constant_override("icon_max_width", 28)
+        button.add_theme_font_size_override("font_size", 17)
+        button.add_theme_color_override("font_color", Color("#ffffff") if selected else Color("#e4e9ff"))
+        button.add_theme_color_override("font_hover_color", Color("#ffffff"))
+        button.add_theme_color_override("font_pressed_color", Color("#ffffff"))
         button.add_theme_stylebox_override("normal", _style(_theme_color().darkened(0.32) if selected else PANEL2, 10))
         button.add_theme_stylebox_override("hover", _style(_theme_color().darkened(0.18), 10))
         button.add_theme_stylebox_override("pressed", _style(_theme_color().darkened(0.42), 10))
         button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        button.custom_minimum_size.y = 66
+        button.custom_minimum_size.y = 84
         button.pressed.connect(func():
             _play_sound(SFX_TAP)
             match tab_id:
@@ -215,9 +217,9 @@ func _section_chips(options: Array[String], selected: String, callback: Callable
     chips.add_theme_constant_override("v_separation", 6)
     content.add_child(chips)
     for option in options:
-        var chip := _button(option, func(): callback.call(option), _theme_color() if option == selected else PANEL2, 44)
+        var chip := _button(option, func(): callback.call(option), _theme_color() if option == selected else PANEL2, 52)
         chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-        chip.add_theme_font_size_override("font_size", 13)
+        chip.add_theme_font_size_override("font_size", 17)
         chips.add_child(chip)
 
 
