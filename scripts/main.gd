@@ -621,6 +621,16 @@ func _show_tutorial(id: String) -> void:
         _tutorial_memory_practice(body, id)
     elif id == "merge" or id == "snake":
         _tutorial_swipe_practice(body, id)
+    elif id == "stack" or id == "rhythm":
+        _tutorial_timing_practice(body, id)
+    elif id == "whack":
+        _tutorial_whack_practice(body, id)
+    elif id == "sort":
+        _tutorial_sort_practice(body, id)
+    elif id == "dots":
+        _tutorial_dots_practice(body, id)
+    elif id == "hopper":
+        _tutorial_hopper_practice(body, id)
     else:
         body.add_child(_button("LET'S PLAY!", func(): _dismiss_tutorial(id), ACCENT, 60))
 
@@ -740,6 +750,134 @@ func _tutorial_swipe_practice(body: VBoxContainer, id: String) -> void:
                 prompt.text = "Well done! You're ready to play."
                 start.disabled = false
     )
+
+func _tutorial_timing_practice(body: VBoxContainer, id: String) -> void:
+    var prompt := Label.new()
+    prompt.text = "PRACTICE: Tap when the moving marker is in the middle!"
+    prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    prompt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    prompt.add_theme_color_override("font_color", CYAN)
+    body.add_child(prompt)
+
+    var caption := Label.new()
+    caption.text = "        |      HIT ZONE      |"
+    caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    caption.add_theme_color_override("font_color", Color("#facc15"))
+    body.add_child(caption)
+
+    var meter := ProgressBar.new()
+    meter.custom_minimum_size = Vector2(240, 32)
+    meter.min_value = 0.0
+    meter.max_value = 100.0
+    meter.value = 0.0
+    meter.show_percentage = false
+    body.add_child(meter)
+    var travel := create_tween().set_loops()
+    travel.tween_property(meter, "value", 100.0, 1.4)
+    travel.tween_property(meter, "value", 0.0, 1.4)
+
+    var attempts := [0]
+    var hits := [0]
+    var tap := _button("TAP TO TIME YOUR HIT", func(): pass, Color("#f9738f"), 60)
+    body.add_child(tap)
+    var start := _button("LET'S PLAY!", func(): _dismiss_tutorial(id), ACCENT, 60)
+    start.disabled = true
+    body.add_child(start)
+    tap.pressed.connect(func():
+        attempts[0] += 1
+        if meter.value >= 38.0 and meter.value <= 62.0:
+            hits[0] += 1
+            prompt.text = "PERFECT TIMING! You are ready to play."
+            tap.disabled = true
+            start.disabled = false
+            travel.kill()
+        else:
+            prompt.text = "Not quite! Watch the marker and try again."
+    )
+
+func _tutorial_whack_practice(body: VBoxContainer, id: String) -> void:
+    var prompt := _practice_prompt(body, "PRACTICE: Tap the mole when it appears!")
+    var mole := _button("MOLE!", func(): pass, Color("#f59e0b"), 66)
+    body.add_child(mole)
+    var start := _practice_start(body, id)
+    mole.pressed.connect(func():
+        mole.text = "GREAT HIT!"
+        mole.disabled = true
+        prompt.text = "Nice! Tap the moles quickly in the real game."
+        start.disabled = false
+    )
+
+
+func _tutorial_sort_practice(body: VBoxContainer, id: String) -> void:
+    var prompt := _practice_prompt(body, "PRACTICE: Move the red ball into its matching tube.")
+    var row := HBoxContainer.new()
+    row.alignment = BoxContainer.ALIGNMENT_CENTER
+    body.add_child(row)
+    var source := _button("RED BALL", func(): pass, Color("#ef4444"), 68)
+    var target := _button("RED TUBE", func(): pass, Color("#be123c"), 68)
+    row.add_child(source)
+    row.add_child(target)
+    target.disabled = true
+    var start := _practice_start(body, id)
+    source.pressed.connect(func():
+        source.text = "EMPTY"
+        source.disabled = true
+        target.disabled = false
+        prompt.text = "Now tap the red tube to place the ball!"
+    )
+    target.pressed.connect(func():
+        target.text = "MATCH!"
+        target.disabled = true
+        prompt.text = "Perfect! Group matching colors together."
+        start.disabled = false
+    )
+
+
+func _tutorial_dots_practice(body: VBoxContainer, id: String) -> void:
+    var prompt := _practice_prompt(body, "PRACTICE: Drag from the left blue dot to the right blue dot. Keep your finger down!")
+    var board := preload("res://scripts/tutorial_dots_drag.gd").new()
+    board.custom_minimum_size = Vector2(240, 112)
+    board.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    body.add_child(board)
+    var start := _practice_start(body, id)
+    board.completed.connect(func():
+        prompt.text = "Great connection! In the game, drag between matching colors without crossing paths."
+        start.disabled = false
+    )
+
+
+func _tutorial_hopper_practice(body: VBoxContainer, id: String) -> void:
+    var prompt := _practice_prompt(body, "PRACTICE: Tap to jump over three obstacles!")
+    var jump := _button("TAP TO JUMP  (0/3)", func(): pass, Color("#a78bfa"), 66)
+    body.add_child(jump)
+    var start := _practice_start(body, id)
+    var jumps := [0]
+    jump.pressed.connect(func():
+        jumps[0] += 1
+        jump.text = "TAP TO JUMP  (%d/3)" % mini(jumps[0], 3)
+        if jumps[0] >= 3:
+            jump.disabled = true
+            prompt.text = "Three jumps! You're ready to hop."
+            start.disabled = false
+    )
+
+
+func _practice_prompt(body: VBoxContainer, message: String) -> Label:
+    var prompt := Label.new()
+    prompt.text = message
+    prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    prompt.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    prompt.add_theme_color_override("font_color", CYAN)
+    body.add_child(prompt)
+    return prompt
+
+
+func _practice_start(body: VBoxContainer, id: String) -> Button:
+    var start := _button("LET'S PLAY!", func(): _dismiss_tutorial(id), ACCENT, 60)
+    start.disabled = true
+    body.add_child(start)
+    return start
+
 
 func _dismiss_tutorial(id: String) -> void:
     seen_tutorials[id] = true
