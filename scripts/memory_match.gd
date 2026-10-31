@@ -4,8 +4,9 @@ class_name MemoryMatch
 signal finished(game_id: String, score: int, extra: Dictionary)
 
 const FACE_DOWN := "✦"
-const SYMBOLS := ["🍓", "🚀", "🌙", "🐸", "💎", "🎈", "🦊", "⚡"]
-const CARD := Color("#29345f")
+const SYMBOLS := ["A", "B", "C", "D", "E", "F", "G", "H"]
+const FACE_COLORS := [Color("#f97373"), Color("#38bdf8"), Color("#fbbf24"), Color("#c084fc"), Color("#34d399"), Color("#fb923c"), Color("#f472b6"), Color("#a3e635")]
+const CARD := Color("#40549a")
 const ACCENT := Color("#34d399")
 
 var cards: Array[String] = []
@@ -29,16 +30,16 @@ func start_game() -> void:
 func _build_ui() -> void:
     var root := VBoxContainer.new()
     root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    root.add_theme_constant_override("separation", 12)
+    root.add_theme_constant_override("separation", 16)
     add_child(root)
     var title := Label.new()
     title.text = "MEMORY MATCH"
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size", 27)
+    title.add_theme_font_size_override("font_size", 34)
     title.add_theme_color_override("font_color", Color("#d1fae5"))
     root.add_child(title)
     var subtitle := Label.new()
-    subtitle.text = "Find all 8 matching pairs. Fewer moves earn more points!"
+    subtitle.text = "Match the big colorful letters! Find all 8 pairs."
     subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     subtitle.add_theme_color_override("font_color", Color("#c4cbe8"))
@@ -53,8 +54,8 @@ func _build_ui() -> void:
     grid = GridContainer.new()
     grid.columns = 4
     grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    grid.add_theme_constant_override("h_separation", 8)
-    grid.add_theme_constant_override("v_separation", 8)
+    grid.add_theme_constant_override("h_separation", 12)
+    grid.add_theme_constant_override("v_separation", 12)
     root.add_child(grid)
     status_label = Label.new()
     status_label.text = "Tap any card to reveal it."
@@ -64,7 +65,7 @@ func _build_ui() -> void:
     root.add_child(status_label)
     var restart := Button.new()
     restart.text = "↻  SHUFFLE & RESTART"
-    restart.custom_minimum_size.y = 54
+    restart.custom_minimum_size.y = 68
     restart.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     restart.pressed.connect(_new_round)
     root.add_child(restart)
@@ -74,7 +75,7 @@ func _stat_label(value: String) -> Label:
     label.text = value
     label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    label.add_theme_font_size_override("font_size", 17)
+    label.add_theme_font_size_override("font_size", 23)
     label.add_theme_color_override("font_color", Color("#f8fafc"))
     return label
 
@@ -89,10 +90,13 @@ func _new_round() -> void:
         matched.append(false)
         var button := Button.new()
         button.text = FACE_DOWN
-        button.custom_minimum_size = Vector2(0, 76)
+        button.custom_minimum_size = Vector2(0, 125)
         button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        button.add_theme_font_size_override("font_size", 26)
-        button.add_theme_color_override("font_color", Color("#e0e7ff"))
+        button.add_theme_font_size_override("font_size", 54)
+        button.add_theme_color_override("font_color", Color("#ffffff"))
+        button.add_theme_color_override("font_hover_color", Color("#ffffff"))
+        button.add_theme_color_override("font_pressed_color", Color("#ffffff"))
+        button.add_theme_color_override("font_disabled_color", Color("#ffffff"))
         button.add_theme_stylebox_override("normal", _card_style(CARD))
         button.add_theme_stylebox_override("hover", _card_style(Color("#3b4b80")))
         button.add_theme_stylebox_override("pressed", _card_style(Color("#4f46e5")))
@@ -104,6 +108,11 @@ func _new_round() -> void:
 func _card_style(color: Color) -> StyleBoxFlat:
     var style := StyleBoxFlat.new()
     style.bg_color = color
+    style.border_width_left = 3
+    style.border_width_right = 3
+    style.border_width_top = 3
+    style.border_width_bottom = 3
+    style.border_color = Color("#e0e7ff")
     style.corner_radius_top_left = 12; style.corner_radius_top_right = 12
     style.corner_radius_bottom_left = 12; style.corner_radius_bottom_right = 12
     style.content_margin_top = 5; style.content_margin_bottom = 5
@@ -112,14 +121,16 @@ func _card_style(color: Color) -> StyleBoxFlat:
 func _pick(index: int) -> void:
     if not running or lock_board or matched[index] or index == first_pick: return
     buttons[index].text = cards[index]
+    var face_color: Color = FACE_COLORS[SYMBOLS.find(cards[index])]
+    buttons[index].add_theme_stylebox_override("normal", _card_style(face_color))
     if first_pick == -1:
         first_pick = index
         return
     moves += 1
     if cards[first_pick] == cards[index]:
         matched[first_pick] = true; matched[index] = true
-        buttons[first_pick].add_theme_stylebox_override("normal", _card_style(Color("#166b59")))
-        buttons[index].add_theme_stylebox_override("normal", _card_style(Color("#166b59")))
+        buttons[first_pick].add_theme_stylebox_override("disabled", _card_style(Color("#167c64")))
+        buttons[index].add_theme_stylebox_override("disabled", _card_style(Color("#167c64")))
         buttons[first_pick].disabled = true; buttons[index].disabled = true
         pairs_found += 1
         score += maxi(20, 100 - moves * 2)
@@ -140,8 +151,12 @@ func _pick(index: int) -> void:
         _refresh_stats()
         await get_tree().create_timer(0.75).timeout
         if not is_inside_tree(): return
-        if not matched[old_pick]: buttons[old_pick].text = FACE_DOWN
-        if not matched[index]: buttons[index].text = FACE_DOWN
+        if not matched[old_pick]:
+            buttons[old_pick].text = FACE_DOWN
+            buttons[old_pick].add_theme_stylebox_override("normal", _card_style(CARD))
+        if not matched[index]:
+            buttons[index].text = FACE_DOWN
+            buttons[index].add_theme_stylebox_override("normal", _card_style(CARD))
         lock_board = false
 
 func _refresh_stats() -> void:

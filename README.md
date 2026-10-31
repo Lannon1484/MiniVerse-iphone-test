@@ -50,3 +50,8 @@ This is a playable starter build, not a production-ready commercial release. It 
 - Recent game history is saved locally and restored between sessions.
 - Full game list remains available in Game Library.
 - Memory Match now has its own card illustration, distinct from Perfect Stack.
+
+## Memory Match phone readability update
+- 125px high cards and large 54px characters in a 4x4 grid.
+- High-contrast A-H pairs with unique bright card colors to avoid missing emoji font glyphs on mobile Web.
+- Clear matched-card green state, larger scores, and larger restart button.
