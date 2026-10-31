@@ -83,6 +83,30 @@ const SHOP_AVATARS := [
     {"id":"slime","name":"Happy Slime","price":320,"color":"#34d399"},
     {"id":"robot","name":"Pocket Robot","price":450,"color":"#67e8f9"}
 ]
+var owned_effects: Dictionary = {"classic": true}
+var equipped_effect := "classic"
+const SHOP_EFFECTS := [
+    {"id":"classic","name":"Classic Confetti","price":0,"description":"The original rainbow celebration.","color":"#a78bfa"},
+    {"id":"starlight","name":"Starlight Shower","price":220,"description":"Glowing golden stars after a victory.","color":"#facc15"},
+    {"id":"ocean","name":"Ocean Bubbles","price":320,"description":"Floating aqua circles after a victory.","color":"#22d3ee"},
+    {"id":"hearts","name":"Heart Burst","price":420,"description":"Pink heart-shaped victory particles.","color":"#fb7185"}
+]
+# Daily missions are generated from the device's local calendar date.
+# Only rounds finished today count toward today's missions.
+var mission_day := ""
+var mission_progress: Dictionary = {}
+var mission_claimed: Dictionary = {}
+var mission_notice := ""
+
+const MISSION_GAMES := ["fast", "merge", "stack", "memory", "whack", "sort", "snake", "dots", "hopper", "rhythm"]
+
+# Login rewards are claimable once per local calendar day. A missed day
+# resets the consecutive streak; claiming again on the same day does not.
+var login_last_claim := ""
+var login_streak := 0
+var login_notice := ""
+var login_total_claims := 0
+
 var tutorial_overlay: Control
 
 const TUTORIALS := {
@@ -344,9 +368,30 @@ func _avatar_image(avatar_id: String, dimension: int = 64) -> TextureRect:
     return picture
 
 
+func _effect_purchase(effect_id: String) -> void:
+    for item in SHOP_EFFECTS:
+        if str(item["id"]) != effect_id:
+            continue
+        var cost: int = int(item["price"])
+        if owned_effects.has(effect_id):
+            equipped_effect = effect_id
+            shop_message = "Equipped %s!" % str(item["name"])
+        elif coins >= cost:
+            coins -= cost
+            owned_effects[effect_id] = true
+            equipped_effect = effect_id
+            shop_message = "Unlocked and equipped %s!" % str(item["name"])
+            _play_sound(SFX_COLLECT)
+        else:
+            shop_message = "You need %d more coins for %s." % [cost - coins, str(item["name"])]
+        _save()
+        shop()
+        return
+
+
 func shop() -> void:
     _shell()
-    _heading("Cosmetic Shop", "Customize your theme and avatar with earned coins. No gameplay advantages.")
+    _heading("Cosmetic Shop", "Customize themes, avatars and victory effects. No gameplay advantages.")
     _card("YOUR WALLET", "%d coins available  •  Purchases save automatically." % coins)
     if shop_message != "":
         _card("SHOP UPDATE", shop_message)
@@ -403,6 +448,30 @@ func shop() -> void:
         var avatar_button := _button("EQUIPPED" if avatar_equipped else ("EQUIP" if avatar_owned else "BUY FOR %d COINS" % avatar_price), func(): _avatar_purchase(avatar_id), Color(str(item["color"])), 52)
         avatar_button.disabled = avatar_equipped
         avatar_column.add_child(avatar_button)
+    _heading("Victory Effects", "Choose the celebration shown after winning a level.")
+    for item in SHOP_EFFECTS:
+        var effect_id: String = str(item["id"])
+        var effect_price: int = int(item["price"])
+        var effect_owned: bool = owned_effects.has(effect_id)
+        var effect_equipped: bool = equipped_effect == effect_id
+        var effect_card := PanelContainer.new()
+        effect_card.add_theme_stylebox_override("panel", _lobby_card_style(Color(str(item["color"]))))
+        content.add_child(effect_card)
+        var effect_column := VBoxContainer.new()
+        effect_column.add_theme_constant_override("separation", 6)
+        effect_card.add_child(effect_column)
+        var effect_title := Label.new()
+        effect_title.text = str(item["name"]) + ("  -  EQUIPPED" if effect_equipped else "")
+        effect_title.add_theme_color_override("font_color", Color(str(item["color"])))
+        effect_title.add_theme_font_size_override("font_size", 19)
+        effect_column.add_child(effect_title)
+        var effect_description := Label.new()
+        effect_description.text = str(item["description"])
+        effect_description.add_theme_color_override("font_color", MUTED)
+        effect_column.add_child(effect_description)
+        var effect_button := _button("EQUIPPED" if effect_equipped else ("EQUIP" if effect_owned else "BUY FOR %d COINS" % effect_price), func(): _effect_purchase(effect_id), Color(str(item["color"])), 52)
+        effect_button.disabled = effect_equipped
+        effect_column.add_child(effect_button)
     content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "home"))
 
 func _heading(title: String, subtitle := ""):
@@ -439,6 +508,72 @@ func _card(title: String, body: String) -> PanelContainer:
     d.add_theme_color_override("font_color", MUTED)
     v.add_child(d)
     return p
+
+func _stat_rate(wins: int, played: int) -> String:
+    if played <= 0:
+        return "0%"
+    return "%d%%" % int(round(100.0 * float(wins) / float(played)))
+
+
+func _profile_favorite() -> String:
+    var favorite_id := ""
+    var favorite_plays := 0
+    for g in GAMES:
+        var id: String = str(g["id"])
+        var played: int = int(game_play_counts.get(id, 0))
+        if played > favorite_plays:
+            favorite_plays = played
+            favorite_id = id
+    return _game_name(favorite_id) if favorite_id != "" else "Not yet discovered"
+
+
+func player_profile() -> void:
+    _shell()
+    _heading("Player Profile", "Your MiniVerse journey, all in one place.")
+    var avatar_panel := PanelContainer.new()
+    avatar_panel.add_theme_stylebox_override("panel", _style(PANEL.lerp(_theme_color(), 0.20), 18))
+    content.add_child(avatar_panel)
+    var avatar_row := HBoxContainer.new()
+    avatar_row.add_theme_constant_override("separation", 14)
+    avatar_panel.add_child(avatar_row)
+    avatar_row.add_child(_avatar_image(equipped_avatar, 84))
+    var profile_details := VBoxContainer.new()
+    profile_details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    avatar_row.add_child(profile_details)
+    var profile_title := Label.new()
+    profile_title.text = "MINIVERSE EXPLORER"
+    profile_title.add_theme_color_override("font_color", _theme_color().lightened(0.5))
+    profile_title.add_theme_font_size_override("font_size", 19)
+    profile_details.add_child(profile_title)
+    var profile_level := Label.new()
+    profile_level.text = "Level %d  |  %d total XP" % [level, xp]
+    profile_level.add_theme_color_override("font_color", TEXT)
+    profile_details.add_child(profile_level)
+    var profile_wallet := Label.new()
+    profile_wallet.text = "%d coins available" % coins
+    profile_wallet.add_theme_color_override("font_color", MUTED)
+    profile_details.add_child(profile_wallet)
+    _card("OVERALL PERFORMANCE", "Rounds played: %d\nLevels cleared: %d\nWin rate: %s\nFavorite game: %s" % [total_games_played, total_wins, _stat_rate(total_wins, total_games_played), _profile_favorite()])
+    var unlocked_achievements := 0
+    for achievement_id in achievement_claimed.keys():
+        if bool(achievement_claimed[achievement_id]):
+            unlocked_achievements += 1
+    var total_stars := 0
+    for game in GAMES:
+        total_stars += int(best_stars.get(str(game["id"]), 0))
+    _card("COLLECTION & REWARDS", "Achievements: %d / %d\nBest stars earned: %d / 30\nThemes owned: %d / %d\nAvatars owned: %d / %d\nVictory effects owned: %d / %d\nDaily login claims: %d" % [unlocked_achievements, ACHIEVEMENT_INFO.size(), total_stars, owned_themes.size(), SHOP_THEMES.size(), owned_avatars.size(), SHOP_AVATARS.size(), owned_effects.size(), SHOP_EFFECTS.size(), login_total_claims])
+    _heading("Game Statistics", "Records and progress for each of your ten games.")
+    for game in GAMES:
+        var id: String = str(game["id"])
+        var played: int = int(game_play_counts.get(id, 0))
+        var wins: int = int(game_win_counts.get(id, 0))
+        var record: int = int(best_scores.get(id, 0))
+        var stars: int = int(best_stars.get(id, 0))
+        var cleared: int = maxi(Difficulty.level(id) - 1, 0)
+        _card(str(game["title"]), "Rounds: %d  |  Wins: %d  |  Win rate: %s\nBest score: %d  |  Best stars: %d / 3\nLevels cleared: %d" % [played, wins, _stat_rate(wins, played), record, stars, cleared])
+        content.add_child(_button("PLAY %s" % str(game["title"]).to_upper(), func(): launch(id), Color("#344a9b"), 44))
+    content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "back"))
+
 
 func home():
     Difficulty.clear_retry_level(game_id)
@@ -485,6 +620,7 @@ func home():
     profile.add_child(profile_label)
     content.add_child(_menu_button("PLAY A RANDOM GAME", _random_game, Color("#36e58a"), "play", 60))
     content.add_child(_menu_button("PLAY TODAY'S CHALLENGE", _daily_challenge, Color("#fbbf24"), "daily", 54))
+    content.add_child(_menu_button("DAILY MISSIONS", daily_missions, Color("#344a9b"), "missions", 54))
     _heading("Recently Played", "Your last three games, ready to jump back into.")
     var shown := 0
     for recent_id in recent_games:
@@ -496,6 +632,7 @@ func home():
         _card("YOUR ADVENTURE STARTS HERE", "Play a game from the library and your three most recently played games will appear here.")
     content.add_child(_menu_button("OPEN GAME LIBRARY", library, Color("#344a9b"), "library"))
     content.add_child(_menu_button("CHALLENGES & EVENTS", events, Color("#344a9b"), "events"))
+    content.add_child(_menu_button("PLAYER PROFILE", player_profile, Color("#344a9b"), "profile"))
     content.add_child(_menu_button("ACHIEVEMENTS", achievements, Color("#344a9b"), "achievements"))
     content.add_child(_menu_button("COSMETIC SHOP", shop, Color("#344a9b"), "shop"))
     content.add_child(_menu_button("SETTINGS", settings, Color("#344a9b"), "settings"))
@@ -765,6 +902,16 @@ func reset_progress():
     equipped_theme = "classic"
     owned_avatars = {"star": true}
     equipped_avatar = "star"
+    owned_effects = {"classic": true}
+    equipped_effect = "classic"
+    login_last_claim = ""
+    login_streak = 0
+    login_total_claims = 0
+    login_notice = ""
+    mission_day = ""
+    mission_progress = {}
+    mission_claimed = {}
+    mission_notice = ""
     shop_message = ""
     Difficulty.reset_all()
     _save()
@@ -1248,6 +1395,139 @@ func _play_rhythm():
     _mount_game(g)
     g.start_game()
 
+func _login_can_claim() -> bool:
+    return login_last_claim != Time.get_date_string_from_system()
+
+
+func _login_claim() -> void:
+    if not _login_can_claim():
+        return
+    var today: String = Time.get_date_string_from_system()
+    var yesterday: String = Time.get_date_string_from_unix_time(Time.get_unix_time_from_datetime_string(today + "T12:00:00") - 86400.0)
+    if login_last_claim == yesterday:
+        login_streak += 1
+    else:
+        login_streak = 1
+    login_streak = mini(login_streak, 7)
+    var day_index: int = login_streak - 1
+    var coin_rewards := [20, 30, 40, 50, 65, 80, 150]
+    var xp_rewards := [20, 25, 35, 45, 55, 70, 125]
+    var coins_earned: int = coin_rewards[day_index]
+    var xp_earned: int = xp_rewards[day_index]
+    coins += coins_earned
+    xp += xp_earned
+    level = int(xp / 100) + 1
+    login_last_claim = today
+    login_total_claims += 1
+    login_notice = "Day %d reward claimed: +%d coins and +%d XP!" % [login_streak, coins_earned, xp_earned]
+    _play_sound(SFX_COLLECT)
+    _save()
+    daily_missions()
+
+
+func _login_calendar() -> void:
+    _heading("Daily Login Rewards", "Claim once a day. Come back tomorrow to keep your streak!")
+    var day_rewards := [20, 30, 40, 50, 65, 80, 150]
+    var xp_rewards := [20, 25, 35, 45, 55, 70, 125]
+    var current_day: int = mini(login_streak + (1 if _login_can_claim() and login_streak > 0 else 0), 7)
+    if login_streak == 0:
+        current_day = 1
+    var yesterday: String = Time.get_date_string_from_unix_time(Time.get_unix_time_from_datetime_string(Time.get_date_string_from_system() + "T12:00:00") - 86400.0)
+    if _login_can_claim() and login_last_claim != yesterday:
+        current_day = 1
+    _card("LOGIN STREAK", "%d consecutive days claimed  •  %d total claims" % [login_streak, login_total_claims])
+    for i in range(7):
+        var marker: String = "NEXT" if i + 1 == current_day and _login_can_claim() else ("CLAIMED" if i + 1 <= login_streak and not _login_can_claim() else "UPCOMING")
+        _card("DAY %d  •  %s" % [i + 1, marker], "%d coins + %d XP" % [day_rewards[i], xp_rewards[i]])
+    if login_notice != "":
+        _card("LATEST LOGIN REWARD", login_notice)
+    if _login_can_claim():
+        content.add_child(_button("CLAIM TODAY'S LOGIN REWARD", _login_claim, Color("#36e58a"), 56))
+    else:
+        _card("COME BACK TOMORROW", "Today's login reward has already been claimed.")
+
+
+func _mission_today() -> String:
+    return Time.get_date_string_from_system()
+
+
+func _mission_reset_if_needed() -> void:
+    var today := _mission_today()
+    if mission_day != today:
+        mission_day = today
+        mission_progress = {}
+        mission_claimed = {}
+        mission_notice = ""
+
+
+func _mission_definitions() -> Array[Dictionary]:
+    # Three deterministic missions per calendar day; no internet required.
+    var day_info: Dictionary = Time.get_datetime_dict_from_datetime_string(mission_day, false)
+    var day_number: int = int(day_info.get("year", 2026)) * 372 + int(day_info.get("month", 1)) * 31 + int(day_info.get("day", 1))
+    var focus_game: String = MISSION_GAMES[day_number % MISSION_GAMES.size()]
+    var other_game: String = MISSION_GAMES[(day_number + 4) % MISSION_GAMES.size()]
+    return [
+        {"id":"play_three", "title":"Daily Warm-Up", "detail":"Finish any 3 mini-game rounds.", "target":3, "coins":40, "xp":45},
+        {"id":"focus", "title":"Spotlight: %s" % _game_name(focus_game), "detail":"Finish 2 rounds of %s." % _game_name(focus_game), "target":2, "coins":65, "xp":70, "game":focus_game},
+        {"id":"win", "title":"Victory Quest: %s" % _game_name(other_game), "detail":"Successfully clear 1 level of %s." % _game_name(other_game), "target":1, "coins":85, "xp":90, "game":other_game}
+    ]
+
+
+func _mission_record(id: String, passed: bool) -> void:
+    _mission_reset_if_needed()
+    for mission in _mission_definitions():
+        var key: String = str(mission["id"])
+        if mission_claimed.has(key):
+            continue
+        if key == "focus" and id != str(mission["game"]):
+            continue
+        if key == "win" and (not passed or id != str(mission["game"])):
+            continue
+        mission_progress[key] = mini(int(mission_progress.get(key, 0)) + 1, int(mission["target"]))
+
+
+func _mission_claim(key: String) -> void:
+    _mission_reset_if_needed()
+    for mission in _mission_definitions():
+        if str(mission["id"]) != key or mission_claimed.has(key):
+            continue
+        if int(mission_progress.get(key, 0)) < int(mission["target"]):
+            return
+        mission_claimed[key] = true
+        coins += int(mission["coins"])
+        xp += int(mission["xp"])
+        level = int(xp / 100) + 1
+        mission_notice = "Claimed %s: +%d coins and +%d XP!" % [str(mission["title"]), int(mission["coins"]), int(mission["xp"])]
+        _play_sound(SFX_COLLECT)
+        _save()
+        daily_missions()
+        return
+
+
+func daily_missions() -> void:
+    _mission_reset_if_needed()
+    _shell()
+    _heading("Daily Missions", "Three fresh challenges each day. Complete them to claim extra rewards!")
+    _login_calendar()
+    _heading("Today's Missions", "Complete these three objectives for bonus rewards.")
+    _card("TODAY: %s" % mission_day, "Missions reset on your device's next local calendar day.")
+    if mission_notice != "":
+        _card("REWARD CLAIMED", mission_notice)
+    for mission in _mission_definitions():
+        var key: String = str(mission["id"])
+        var progress: int = int(mission_progress.get(key, 0))
+        var target: int = int(mission["target"])
+        var claimed: bool = mission_claimed.has(key)
+        var status: String = "CLAIMED" if claimed else ("READY TO CLAIM" if progress >= target else "%d / %d" % [progress, target])
+        _card(str(mission["title"]), "%s\nProgress: %s\nReward: %d coins + %d XP" % [str(mission["detail"]), status, int(mission["coins"]), int(mission["xp"])])
+        if not claimed and progress >= target:
+            content.add_child(_button("CLAIM REWARD", func(): _mission_claim(key), Color("#36e58a"), 52))
+        elif not claimed and mission.has("game"):
+            var game_id_to_play: String = str(mission["game"])
+            content.add_child(_button("PLAY %s" % _game_name(game_id_to_play), func(): launch(game_id_to_play), Color("#344a9b"), 48))
+    content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "back"))
+
+
 func _daily_challenge():
     # Local daily rotation; does not require an online backend.
     var day_key := int(Time.get_unix_time_from_system() / 86400.0)
@@ -1296,6 +1576,7 @@ func _finished(id: String, score: int, extra: Dictionary = {}):
         total_wins += 1
         game_win_counts[id] = int(game_win_counts.get(id, 0)) + 1
     _award_achievements()
+    _mission_record(id, passed)
     _save()
     _play_sound(SFX_WIN if passed else SFX_OOPS)
     _results(id, score, reward, record, earned_xp, stars_earned, played_level, goal, passed)
@@ -1323,6 +1604,11 @@ func _results(id: String, score: int, reward: int, record: bool, earned_xp: int,
     _heading("Level Complete!" if passed else "Try Again!", "Level %d • %s" % [played_level, "Goal reached!" if passed else "You can retry this level."])
     if not achievement_new.is_empty():
         _card("NEW ACHIEVEMENT!", " • ".join(achievement_new) + "\\nBonus coins and XP added to your wallet.")
+    for mission in _mission_definitions():
+        var mission_id: String = str(mission["id"])
+        if not mission_claimed.has(mission_id) and int(mission_progress.get(mission_id, 0)) >= int(mission["target"]):
+            _card("DAILY MISSION COMPLETE!", "%s — claim your bonus in Daily Missions!" % str(mission["title"]))
+
 
     var celebration := PanelContainer.new()
     celebration.add_theme_stylebox_override("panel", _style(Color("#25234e"), 22))
@@ -1384,6 +1670,7 @@ func _results(id: String, score: int, reward: int, record: bool, earned_xp: int,
     # Confetti is drawn above the results without blocking buttons or scrolling.
     if passed:
         var confetti := RewardConfetti.new()
+        confetti.effect_style = equipped_effect
         confetti.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
         confetti.mouse_filter = Control.MOUSE_FILTER_IGNORE
         add_child(confetti)
@@ -1437,7 +1724,7 @@ func _game_name(id: String) -> String:
 func _save():
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims}))
         f.close()
 
 func _load_save():
@@ -1447,6 +1734,13 @@ func _load_save():
     var data = JSON.parse_string(f.get_as_text())
     f.close()
     if typeof(data) == TYPE_DICTIONARY:
+        login_last_claim = str(data.get("login_last_claim", ""))
+        login_streak = int(data.get("login_streak", 0))
+        login_total_claims = int(data.get("login_total_claims", 0))
+        mission_day = str(data.get("mission_day", ""))
+        mission_progress = data.get("mission_progress", {})
+        mission_claimed = data.get("mission_claimed", {})
+        _mission_reset_if_needed()
         sound_enabled = bool(data.get("sound_enabled", true))
         coins = int(data.get("coins",0))
         xp = int(data.get("xp",0))
@@ -1463,6 +1757,11 @@ func _load_save():
         owned_themes["classic"] = true
         owned_avatars = data.get("owned_avatars", {"star": true})
         owned_avatars["star"] = true
+        owned_effects = data.get("owned_effects", {"classic": true})
+        owned_effects["classic"] = true
+        equipped_effect = str(data.get("equipped_effect", "classic"))
+        if not owned_effects.has(equipped_effect):
+            equipped_effect = "classic"
         equipped_avatar = str(data.get("equipped_avatar", "star"))
         if not owned_avatars.has(equipped_avatar):
             equipped_avatar = "star"
