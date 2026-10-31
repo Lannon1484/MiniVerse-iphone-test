@@ -64,3 +64,9 @@ Visual update: illustrated Fast Fingers target and candy-sky field; glossy round
 - New illustrated fantasy portal and floating-islands hero.
 - Gold title, colorful outlined game cards, glossy raised buttons.
 - Existing games, Recently Played and progress preserved.
+
+
+## Game #7 — Neon Snake
+- Swipe controls on mobile, arrow keys/WASD on PC, plus on-screen direction buttons.
+- Collect glowing stars, grow the snake, avoid walls and your own body.
+- Difficulty rises gradually; scores feed existing coins/XP/personal bests.

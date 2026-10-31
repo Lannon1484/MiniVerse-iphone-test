@@ -47,6 +47,16 @@ func _draw() -> void:
             var font := ThemeDB.fallback_font
             if font:
                 draw_string(font, pos + Vector2(cell * 0.18, cell * 0.68), values[i], HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(10, int(cell * 0.45)), Color("#17172b"))
+    elif game_id == "snake":
+        var cell: float = minf(w, h) * 0.18
+        var origin := center - Vector2(cell * 1.5, cell * 0.5)
+        for i in range(4):
+            var pos := origin + Vector2(cell * float(i), sin(float(i) * 0.8) * cell * 0.35)
+            draw_circle(pos, cell * 0.55, Color("#4ce3bd") if i == 3 else Color("#40bddf"))
+            draw_arc(pos, cell * 0.55, 0.0, TAU, 24, Color("#e3fff9"), 2.0)
+        draw_circle(origin + Vector2(cell * 3.0, 0), cell * 0.12, Color("#10264b"))
+        var star := center + Vector2(cell * 1.6, -cell * 1.4)
+        draw_circle(star, cell * 0.45, Color("#ffd56e"))
     elif game_id == "sort":
         var tube_colors: Array[Color] = [Color("#ff739f"), Color("#55d9ff"), Color("#ffd15b"), Color("#83e69b")]
         for i in range(3):
