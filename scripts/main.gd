@@ -56,6 +56,21 @@ var rng := RandomNumberGenerator.new()
 var sound_enabled := true
 var sound_player: AudioStreamPlayer
 var library_filter := "ALL"
+var seen_tutorials: Dictionary = {}
+var tutorial_overlay: Control
+
+const TUTORIALS := {
+    "fast": ["Tap the glowing targets as quickly as you can.", "Build your score before the timer runs out. Smaller targets appear later."],
+    "merge": ["Swipe to slide tiles across the board.", "Matching numbers combine. Make bigger merges to reach the level goal."],
+    "stack": ["Tap to drop each moving block onto the tower.", "Line up the edges carefully. Perfect drops help you build higher."],
+    "memory": ["Tap two cards to reveal their pictures.", "Remember where each picture is and find every matching pair."],
+    "whack": ["Tap the moles when they pop out of their holes.", "Avoid the snakes! Earn enough points before the 20-second round ends."],
+    "sort": ["Tap a tube, then another tube, to pour its top color.", "Group matching colors together until each tube contains only one color."],
+    "snake": ["Swipe to steer your glowing snake around the grid.", "Collect stars to grow and score. Avoid walls and your own tail."],
+    "dots": ["Drag a path between two dots of the same color.", "Connect every pair without crossing another path."],
+    "hopper": ["Steer your character onto the floating platforms.", "Keep climbing and collecting stars. Watch where the next platform appears."],
+    "rhythm": ["Tap the lane when a note enters the glowing catch zone.", "Each successful hit plays part of the melody. Keep the rhythm to finish the song!"]
+}
 
 func _ready():
     rng.randomize()
@@ -76,6 +91,7 @@ func _input(event: InputEvent) -> void:
         get_viewport().set_input_as_handled()
 
 func _shell():
+    tutorial_overlay = null
     lobby_touch_scrolling = true
     for c in get_children():
         if c != sound_player:
@@ -426,12 +442,27 @@ func settings():
     _heading("Settings", "Local starter build settings.")
     _card("SAVE DATA", "Progress is stored on this device in Godot's user data folder.")
     content.add_child(_button("SOUND EFFECTS: ON" if sound_enabled else "SOUND EFFECTS: OFF", _toggle_sound, Color("#344a9b")))
+    _card("TUTORIALS", "Each game's instructions appear the first time you play. You can review them any time.")
+    content.add_child(_button("REPLAY GAME TUTORIALS", _tutorial_menu, Color("#344a9b")))
     _card("LEVEL TESTING", "Reset a single game's level to 1 without losing coins, XP, or progress in other games.")
     content.add_child(_button("RESET MEMORY MATCH LEVEL", func(): _reset_game_level("memory"), Color("#344a9b")))
     content.add_child(_button("CHOOSE ANOTHER GAME TO RESET", _reset_level_menu, Color("#344a9b")))
     content.add_child(_button("RESET ALL GAME LEVELS", _confirm_reset_levels, Color("#f9738f")))
     content.add_child(_button("RESET LOCAL PROGRESS", _confirm_reset_progress, Color("#f9738f")))
     content.add_child(_button("← BACK TO HOME", home, PANEL2))
+
+func _tutorial_menu() -> void:
+    _shell()
+    _heading("Game Tutorials", "Choose a game to review its instructions before playing.")
+    for g in GAMES:
+        var id: String = str(g.id)
+        content.add_child(_button("HOW TO PLAY: %s" % str(g.title), func(): _replay_tutorial(id), Color("#344a9b")))
+    content.add_child(_button("BACK TO SETTINGS", settings, PANEL2))
+
+func _replay_tutorial(id: String) -> void:
+    seen_tutorials.erase(id)
+    _save()
+    launch(id)
 
 func _toggle_sound() -> void:
     sound_enabled = not sound_enabled
@@ -477,6 +508,7 @@ func reset_progress():
     best_scores = {}
     best_stars = {}
     recent_games.clear()
+    seen_tutorials.clear()
     Difficulty.reset_all()
     _save()
     settings()
@@ -505,6 +537,91 @@ func launch(id: String):
         "dots": _play_dots()
         "hopper": _play_hopper()
         "rhythm": _play_rhythm()
+    if not bool(seen_tutorials.get(id, false)):
+        _show_tutorial(id)
+
+func _show_tutorial(id: String) -> void:
+    if is_instance_valid(tutorial_overlay):
+        tutorial_overlay.queue_free()
+    # Freeze gameplay until the player dismisses the tutorial.
+    if is_instance_valid(game_root):
+        game_root.process_mode = Node.PROCESS_MODE_DISABLED
+    var layer := Control.new()
+    tutorial_overlay = layer
+    layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    layer.mouse_filter = Control.MOUSE_FILTER_STOP
+    layer.z_index = 100
+    add_child(layer)
+    var shade := ColorRect.new()
+    shade.color = Color(0.02, 0.04, 0.13, 0.88)
+    shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    shade.mouse_filter = Control.MOUSE_FILTER_STOP
+    layer.add_child(shade)
+    var center := CenterContainer.new()
+    center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    center.mouse_filter = Control.MOUSE_FILTER_STOP
+    layer.add_child(center)
+    var panel := PanelContainer.new()
+    panel.custom_minimum_size = Vector2(280, 0)
+    panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+    panel.add_theme_stylebox_override("panel", _style(PANEL, 20))
+    center.add_child(panel)
+    var margins := MarginContainer.new()
+    for side in ["left", "right", "top", "bottom"]:
+        margins.add_theme_constant_override("margin_" + side, 20)
+    panel.add_child(margins)
+    var body := VBoxContainer.new()
+    body.add_theme_constant_override("separation", 16)
+    margins.add_child(body)
+    var heading := Label.new()
+    heading.text = "HOW TO PLAY"
+    heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    heading.add_theme_font_size_override("font_size", 18)
+    heading.add_theme_color_override("font_color", CYAN)
+    body.add_child(heading)
+    var name_label := Label.new()
+    name_label.text = _game_name(id)
+    name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    name_label.add_theme_font_size_override("font_size", 25)
+    name_label.add_theme_color_override("font_color", TEXT)
+    body.add_child(name_label)
+    # Reuse the same illustrated artwork as the game cards so each tutorial
+    # visually demonstrates which game the player is about to learn.
+    var preview_frame := PanelContainer.new()
+    preview_frame.custom_minimum_size = Vector2(240, 136)
+    preview_frame.add_theme_stylebox_override("panel", _style(PANEL2, 16))
+    body.add_child(preview_frame)
+    var preview_holder := CenterContainer.new()
+    preview_frame.add_child(preview_holder)
+    var preview := GamePreview.new()
+    preview.game_id = id
+    preview.custom_minimum_size = Vector2(212, 116)
+    preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    preview_holder.add_child(preview)
+    # A gentle motion draws attention to the illustration without obscuring
+    # instructions or requiring touch interactions.
+    var motion := create_tween().set_loops()
+    motion.tween_property(preview, "modulate:a", 0.72, 0.85)
+    motion.tween_property(preview, "modulate:a", 1.0, 0.85)
+    for instruction in TUTORIALS.get(id, []):
+        var label := Label.new()
+        label.text = str(instruction)
+        label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        label.custom_minimum_size.x = 240
+        label.add_theme_font_size_override("font_size", 17)
+        label.add_theme_color_override("font_color", TEXT)
+        body.add_child(label)
+    body.add_child(_button("LET'S PLAY!", func(): _dismiss_tutorial(id), ACCENT, 60))
+
+func _dismiss_tutorial(id: String) -> void:
+    seen_tutorials[id] = true
+    _save()
+    if is_instance_valid(game_root):
+        game_root.process_mode = Node.PROCESS_MODE_INHERIT
+    if is_instance_valid(tutorial_overlay):
+        tutorial_overlay.queue_free()
+    tutorial_overlay = null
 
 func _gameplay_sound(kind: String) -> void:
     match kind:
@@ -790,7 +907,7 @@ func _game_name(id: String) -> String:
 func _save():
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"sound_enabled":sound_enabled}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled}))
         f.close()
 
 func _load_save():
@@ -806,6 +923,7 @@ func _load_save():
         level = int(data.get("level",1))
         best_scores = data.get("best_scores",{})
         best_stars = data.get("best_stars",{})
+        seen_tutorials = data.get("seen_tutorials",{})
         recent_games.clear()
         for saved_id in data.get("recent_games", []):
             if _game_data(str(saved_id)).size() > 0 and recent_games.size() < 3:
