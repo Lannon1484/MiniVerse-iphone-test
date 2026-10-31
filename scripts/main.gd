@@ -98,6 +98,34 @@ const SHOP_THEMES := [
 ]
 var owned_avatars: Dictionary = {"star": true}
 var equipped_avatar := "star"
+var owned_avatar_frames: Dictionary = {"classic": true}
+var cosmetic_rewards_claimed: Dictionary = {}
+var cosmetic_reward_notice := ""
+const COSMETIC_REWARD_MILESTONES := [
+    {"count": 4, "coins": 60},
+    {"count": 8, "coins": 120},
+    {"count": 12, "coins": 200},
+    {"count": 16, "coins": 300}
+]
+var equipped_profile_badge := "rookie"
+var badge_notice := ""
+const PROFILE_BADGES := [
+    {"id":"rookie","name":"First Steps","symbol":"★","color":"#a78bfa","requirement":"Available from the start"},
+    {"id":"explorer","name":"Explorer","symbol":"✦","color":"#38bdf8","requirement":"Discover 3 games"},
+    {"id":"collector","name":"Collector","symbol":"◆","color":"#facc15","requirement":"Discover 5 games"},
+    {"id":"champion","name":"Champion","symbol":"✹","color":"#fb923c","requirement":"Win 25 rounds"},
+    {"id":"veteran","name":"Veteran","symbol":"✿","color":"#34d399","requirement":"Play 100 rounds"},
+    {"id":"legend","name":"Legend","symbol":"✧","color":"#fb7185","requirement":"Reach player level 50"}
+]
+var equipped_avatar_frame := "classic"
+var frame_notice := ""
+const AVATAR_FRAMES := [
+    {"id":"classic", "name":"Classic", "price":0, "color":"#a78bfa", "description":"Your original purple outline."},
+    {"id":"bronze", "name":"Bronze Explorer", "price":120, "color":"#d49a65", "description":"A warm bronze border."},
+    {"id":"ocean", "name":"Ocean Glow", "price":220, "color":"#22d3ee", "description":"Bright aqua highlights."},
+    {"id":"royal", "name":"Royal Gold", "price":350, "color":"#facc15", "description":"A golden collector frame."},
+    {"id":"legend", "name":"Legendary Rose", "price":500, "color":"#fb7185", "description":"A bold rose-colored frame."}
+]
 const SHOP_AVATARS := [
     {"id":"star","name":"Star Sprite","price":0,"color":"#facc15"},
     {"id":"fox","name":"Forest Fox","price":180,"color":"#fb923c"},
@@ -569,6 +597,45 @@ func _avatar_image(avatar_id: String, dimension: int = 64) -> TextureRect:
     return picture
 
 
+func _framed_avatar(avatar_id: String, dimension: int = 64) -> PanelContainer:
+    var frame_color := Color("#a78bfa")
+    for frame in AVATAR_FRAMES:
+        if str(frame["id"]) == equipped_avatar_frame:
+            frame_color = Color(str(frame["color"]))
+            break
+    var panel := PanelContainer.new()
+    var style := StyleBoxFlat.new()
+    style.bg_color = Color("#181a34")
+    style.border_color = frame_color
+    style.set_border_width_all(5)
+    style.set_corner_radius_all(18)
+    style.set_content_margin_all(5)
+    panel.add_theme_stylebox_override("panel", style)
+    panel.add_child(_avatar_image(avatar_id, dimension))
+    return panel
+
+
+func _frame_select(frame_id: String) -> void:
+    for frame in AVATAR_FRAMES:
+        if str(frame["id"]) != frame_id:
+            continue
+        var cost: int = int(frame["price"])
+        if owned_avatar_frames.has(frame_id):
+            equipped_avatar_frame = frame_id
+            frame_notice = "Equipped %s frame!" % str(frame["name"])
+        elif coins >= cost:
+            coins -= cost
+            owned_avatar_frames[frame_id] = true
+            equipped_avatar_frame = frame_id
+            frame_notice = "Unlocked and equipped %s frame!" % str(frame["name"])
+            _play_sound(SFX_COLLECT)
+        else:
+            frame_notice = "You need %d more coins for this frame." % (cost - coins)
+        _save()
+        player_profile()
+        return
+
+
 func _effect_purchase(effect_id: String) -> void:
     for item in SHOP_EFFECTS:
         if str(item["id"]) != effect_id:
@@ -950,6 +1017,149 @@ func _profile_progress_panel() -> void:
     stack.add_child(reward_label)
 
 
+func _badge_unlocked(badge_id: String) -> bool:
+    match badge_id:
+        "rookie": return true
+        "explorer": return _discovered_game_count() >= 3
+        "collector": return _discovered_game_count() >= 5
+        "champion": return total_wins >= 25
+        "veteran": return total_games_played >= 100
+        "legend": return level >= 50
+    return false
+
+
+func _badge_data(badge_id: String) -> Dictionary:
+    for badge in PROFILE_BADGES:
+        if str(badge["id"]) == badge_id:
+            return badge
+    return PROFILE_BADGES[0]
+
+
+func _badge_label() -> Label:
+    var badge: Dictionary = _badge_data(equipped_profile_badge)
+    var label_node := Label.new()
+    label_node.text = "%s  %s" % [str(badge["symbol"]), str(badge["name"])]
+    label_node.add_theme_font_size_override("font_size", 20)
+    label_node.add_theme_color_override("font_color", Color(str(badge["color"])))
+    label_node.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    return label_node
+
+
+func _equip_profile_badge(badge_id: String) -> void:
+    if not _badge_unlocked(badge_id):
+        return
+    equipped_profile_badge = badge_id
+    badge_notice = "Now displaying: %s" % str(_badge_data(badge_id)["name"])
+    _save()
+    player_profile()
+
+
+func _profile_badge_collection() -> void:
+    _heading("Profile Badges", "Earn badges through gameplay and equip one to display.")
+    if badge_notice != "":
+        _card("BADGE EQUIPPED", badge_notice)
+        badge_notice = ""
+    for badge in PROFILE_BADGES:
+        var badge_id: String = str(badge["id"])
+        var unlocked: bool = _badge_unlocked(badge_id)
+        var equipped: bool = equipped_profile_badge == badge_id
+        var status: String = "EQUIPPED" if equipped else ("UNLOCKED" if unlocked else "LOCKED")
+        _card("%s  %s — %s" % [str(badge["symbol"]), str(badge["name"]), status], str(badge["requirement"]))
+        if unlocked and not equipped:
+            var selected_id: String = badge_id
+            content.add_child(_button("EQUIP " + str(badge["name"]).to_upper(), func(): _equip_profile_badge(selected_id), Color(str(badge["color"])), 56))
+
+
+func _cosmetic_owned_count() -> int:
+    var count: int = owned_themes.size() + owned_avatars.size() + owned_avatar_frames.size() + owned_effects.size()
+    for badge in PROFILE_BADGES:
+        if _badge_unlocked(str(badge["id"])):
+            count += 1
+    return count
+
+
+func _claim_all_cosmetic_rewards(button: Button) -> void:
+    var owned_count: int = _cosmetic_owned_count()
+    var earned: int = 0
+    var claimed_count: int = 0
+    for milestone in COSMETIC_REWARD_MILESTONES:
+        var threshold: int = int(milestone["count"])
+        var milestone_key: String = str(threshold)
+        if owned_count >= threshold and not bool(cosmetic_rewards_claimed.get(milestone_key, false)):
+            cosmetic_rewards_claimed[milestone_key] = true
+            earned += int(milestone["coins"])
+            claimed_count += 1
+    if claimed_count == 0:
+        return
+    coins += earned
+    cosmetic_reward_notice = "Claimed %d collection rewards! +%d coins." % [claimed_count, earned]
+    _save()
+    # Keep the current scroll position: do not rebuild the Profile screen.
+    button.text = "CLAIMED! +%d COINS" % earned
+    button.release_focus()
+    button.focus_mode = Control.FOCUS_NONE
+    button.disabled = true
+
+
+func _cosmetic_collection_section() -> void:
+    var owned_badges: int = 0
+    for badge in PROFILE_BADGES:
+        if _badge_unlocked(str(badge["id"])):
+            owned_badges += 1
+    var categories: Array[Dictionary] = [
+        {"name":"Themes", "owned":owned_themes.size(), "total":SHOP_THEMES.size(), "equipped":equipped_theme},
+        {"name":"Avatars", "owned":owned_avatars.size(), "total":SHOP_AVATARS.size(), "equipped":equipped_avatar},
+        {"name":"Avatar Frames", "owned":owned_avatar_frames.size(), "total":AVATAR_FRAMES.size(), "equipped":equipped_avatar_frame},
+        {"name":"Profile Badges", "owned":owned_badges, "total":PROFILE_BADGES.size(), "equipped":equipped_profile_badge},
+        {"name":"Victory Effects", "owned":owned_effects.size(), "total":SHOP_EFFECTS.size(), "equipped":equipped_effect}
+    ]
+    var total_owned: int = 0
+    var total_available: int = 0
+    for category in categories:
+        total_owned += int(category["owned"])
+        total_available += int(category["total"])
+    _heading("Cosmetic Collection", "Your complete MiniVerse customization progress.")
+    _card("COLLECTION OVERVIEW", "%d / %d cosmetics unlocked (%d%%)" % [total_owned, total_available, int(round(100.0 * float(total_owned) / float(maxi(total_available, 1))))])
+    var overall_bar := ProgressBar.new()
+    overall_bar.custom_minimum_size = Vector2(0, 24)
+    overall_bar.min_value = 0
+    overall_bar.max_value = maxi(total_available, 1)
+    overall_bar.value = total_owned
+    overall_bar.show_percentage = false
+    content.add_child(overall_bar)
+    for category in categories:
+        var owned_count: int = int(category["owned"])
+        var available_count: int = int(category["total"])
+        _card(str(category["name"]).to_upper(), "%d / %d unlocked  •  Equipped: %s" % [owned_count, available_count, str(category["equipped"]).capitalize().replace("_", " ")])
+        var progress := ProgressBar.new()
+        progress.custom_minimum_size = Vector2(0, 18)
+        progress.min_value = 0
+        progress.max_value = maxi(available_count, 1)
+        progress.value = owned_count
+        progress.show_percentage = false
+        content.add_child(progress)
+    _heading("Collection Rewards", "Unlock cosmetics and claim your milestone coin bonuses.")
+    var ready_rewards: int = 0
+    var ready_coins: int = 0
+    for milestone in COSMETIC_REWARD_MILESTONES:
+        var threshold: int = int(milestone["count"])
+        var reward: int = int(milestone["coins"])
+        var claimed: bool = bool(cosmetic_rewards_claimed.get(str(threshold), false))
+        var ready: bool = total_owned >= threshold
+        var status: String = "CLAIMED" if claimed else ("READY" if ready else "LOCKED")
+        _card("%d COSMETICS — %s" % [threshold, status], "%d / %d unlocked  •  %d coin reward" % [mini(total_owned, threshold), threshold, reward])
+        if ready and not claimed:
+            ready_rewards += 1
+            ready_coins += reward
+    if ready_rewards > 0:
+        var claim_button: Button = _button("CLAIM ALL %d REWARDS (+%d COINS)" % [ready_rewards, ready_coins], func(): pass, _theme_color(), 58)
+        claim_button.pressed.connect(func(): _claim_all_cosmetic_rewards(claim_button))
+        content.add_child(claim_button)
+    if cosmetic_reward_notice != "":
+        _card("LATEST COLLECTION REWARD", cosmetic_reward_notice)
+    _card("KEEP COLLECTING", "Visit Shop for themes, avatars, and victory effects. Open Profile to equip avatar frames and earn badges through gameplay.")
+
+
 func player_profile() -> void:
     current_tab = "profile"
     _shell()
@@ -963,7 +1173,7 @@ func player_profile() -> void:
     var avatar_row := HBoxContainer.new()
     avatar_row.add_theme_constant_override("separation", 14)
     avatar_panel.add_child(avatar_row)
-    avatar_row.add_child(_avatar_image(equipped_avatar, 84))
+    avatar_row.add_child(_framed_avatar(equipped_avatar, 84))
     var profile_details := VBoxContainer.new()
     profile_details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     avatar_row.add_child(profile_details)
@@ -974,6 +1184,7 @@ func player_profile() -> void:
     profile_title.add_theme_color_override("font_color", _menu_accent_text(_theme_color()))
     profile_title.add_theme_font_size_override("font_size", 19)
     profile_details.add_child(profile_title)
+    profile_details.add_child(_badge_label())
     var profile_level := Label.new()
     profile_level.text = "Level %d  |  %d total XP" % [level, xp]
     profile_level.add_theme_color_override("font_color", TEXT)
@@ -990,14 +1201,56 @@ func player_profile() -> void:
     profile_details.add_child(profile_wallet)
     var total_stars: int = _profile_total_stars()
     var unlocked_achievements: int = _profile_achievement_count()
-    if profile_section == "overview":
-        _profile_progress_panel()
-        _card("OVERALL PERFORMANCE", "Rounds played: %d\nLevels cleared: %d\nWin rate: %s\nFavorite game: %s" % [total_games_played, total_wins, _stat_rate(total_wins, total_games_played), _profile_favorite()])
-        _card("COLLECTION & REWARDS", "Achievements: %d / %d\nBest stars earned: %d / 30\nThemes owned: %d / %d\nAvatars owned: %d / %d\nVictory effects owned: %d / %d\nDaily login claims: %d" % [unlocked_achievements, ACHIEVEMENT_INFO.size(), total_stars, owned_themes.size(), SHOP_THEMES.size(), owned_avatars.size(), SHOP_AVATARS.size(), owned_effects.size(), SHOP_EFFECTS.size(), login_total_claims])
-    _section_chips(["Overview", "Titles", "Milestones", "Games"], profile_section.capitalize(), func(value: String):
+    _section_chips(["Overview", "Frames", "Collection", "Badges", "Titles", "Milestones", "Games"], profile_section.capitalize(), func(value: String):
         profile_section = value.to_lower()
         player_profile()
     )
+    if profile_section == "overview":
+            _profile_progress_panel()
+            _card("OVERALL PERFORMANCE", "Rounds played: %d\nLevels cleared: %d\nWin rate: %s\nFavorite game: %s" % [total_games_played, total_wins, _stat_rate(total_wins, total_games_played), _profile_favorite()])
+            _card("COLLECTION & REWARDS", "Achievements: %d / %d\nBest stars earned: %d / 30\nThemes owned: %d / %d\nAvatars owned: %d / %d\nVictory effects owned: %d / %d\nDaily login claims: %d" % [unlocked_achievements, ACHIEVEMENT_INFO.size(), total_stars, owned_themes.size(), SHOP_THEMES.size(), owned_avatars.size(), SHOP_AVATARS.size(), owned_effects.size(), SHOP_EFFECTS.size(), login_total_claims])
+    if profile_section == "frames":
+        _heading("Avatar Frames", "Unlock decorative borders with coins. Frames are cosmetic only.")
+        if frame_notice != "":
+            _card("FRAME UPDATE", frame_notice)
+            frame_notice = ""
+        for frame in AVATAR_FRAMES:
+            var frame_id: String = str(frame["id"])
+            var owned: bool = owned_avatar_frames.has(frame_id)
+            var equipped: bool = equipped_avatar_frame == frame_id
+            var frame_color: Color = Color(str(frame["color"]))
+            var frame_card := PanelContainer.new()
+            frame_card.add_theme_stylebox_override("panel", _lobby_card_style(frame_color))
+            content.add_child(frame_card)
+            var frame_row := HBoxContainer.new()
+            frame_row.add_theme_constant_override("separation", 12)
+            frame_card.add_child(frame_row)
+            var swatch := ColorRect.new()
+            swatch.color = frame_color
+            swatch.custom_minimum_size = Vector2(24, 64)
+            swatch.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            frame_row.add_child(swatch)
+            var frame_column := VBoxContainer.new()
+            frame_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+            frame_row.add_child(frame_column)
+            var frame_label := Label.new()
+            frame_label.text = str(frame["name"]) + ("  -  EQUIPPED" if equipped else "")
+            frame_label.add_theme_font_size_override("font_size", 20)
+            frame_label.add_theme_color_override("font_color", TEXT)
+            frame_column.add_child(frame_label)
+            var frame_description := Label.new()
+            frame_description.text = str(frame["description"]) + ("  •  Owned" if owned else "  •  %d coins" % int(frame["price"]))
+            frame_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+            frame_description.add_theme_font_size_override("font_size", 18)
+            frame_description.add_theme_color_override("font_color", Color("#e4eaff"))
+            frame_column.add_child(frame_description)
+            if not equipped:
+                var chosen_frame: String = frame_id
+                frame_column.add_child(_button("EQUIP" if owned else "UNLOCK  %d COINS" % int(frame["price"]), func(): _frame_select(chosen_frame), frame_color, 56))
+    if profile_section == "badges":
+        _profile_badge_collection()
+    if profile_section == "collection":
+        _cosmetic_collection_section()
     if profile_section == "titles":
         _heading("Player Titles", "Earn titles through gameplay, then choose one to display on your profile.")
         if title_notice != "":
@@ -1106,7 +1359,7 @@ func home():
     var identity_row := HBoxContainer.new()
     identity_row.add_theme_constant_override("separation", 12)
     lobby_stack.add_child(identity_row)
-    identity_row.add_child(_avatar_image(equipped_avatar, 66))
+    identity_row.add_child(_framed_avatar(equipped_avatar, 66))
     var identity_text := VBoxContainer.new()
     identity_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     identity_text.add_theme_constant_override("separation", 3)
@@ -1117,6 +1370,7 @@ func home():
     lobby_title.add_theme_font_size_override("font_size", 20)
     lobby_title.add_theme_color_override("font_color", _menu_accent_text(_theme_color()))
     identity_text.add_child(lobby_title)
+    identity_text.add_child(_badge_label())
     var lobby_rank := Label.new()
     lobby_rank.text = "%s  |  LEVEL %d" % [_player_rank_name(level).to_upper(), level]
     lobby_rank.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -2654,7 +2908,7 @@ func _save():
     _grant_milestone_cosmetics()
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"xp_curve_version":2,"last_rewarded_level":last_rewarded_level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"favorite_games":favorite_games,"discovery_rewards_claimed":discovery_rewards_claimed,"collection_milestones_claimed":collection_milestones_claimed,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day,"daily_feature_reward_day":daily_feature_reward_day,"daily_feature_history":daily_feature_history}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"xp_curve_version":2,"last_rewarded_level":last_rewarded_level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"favorite_games":favorite_games,"discovery_rewards_claimed":discovery_rewards_claimed,"collection_milestones_claimed":collection_milestones_claimed,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_avatar_frames":owned_avatar_frames,"equipped_avatar_frame":equipped_avatar_frame,"equipped_profile_badge":equipped_profile_badge,"cosmetic_rewards_claimed":cosmetic_rewards_claimed,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day,"daily_feature_reward_day":daily_feature_reward_day,"daily_feature_history":daily_feature_history}))
         f.close()
 
 func _load_save():
@@ -2726,6 +2980,19 @@ func _load_save():
         if not owned_effects.has(equipped_effect):
             equipped_effect = "classic"
         equipped_avatar = str(data.get("equipped_avatar", "star"))
+        owned_avatar_frames = data.get("owned_avatar_frames", {"classic": true})
+        if typeof(owned_avatar_frames) != TYPE_DICTIONARY:
+            owned_avatar_frames = {"classic": true}
+        owned_avatar_frames["classic"] = true
+        cosmetic_rewards_claimed = data.get("cosmetic_rewards_claimed", {})
+        if typeof(cosmetic_rewards_claimed) != TYPE_DICTIONARY:
+            cosmetic_rewards_claimed = {}
+        equipped_profile_badge = str(data.get("equipped_profile_badge", "rookie"))
+        if not _badge_unlocked(equipped_profile_badge):
+            equipped_profile_badge = "rookie"
+        equipped_avatar_frame = str(data.get("equipped_avatar_frame", "classic"))
+        if not owned_avatar_frames.has(equipped_avatar_frame):
+            equipped_avatar_frame = "classic"
         if not owned_avatars.has(equipped_avatar):
             equipped_avatar = "star"
         equipped_theme = str(data.get("equipped_theme", "classic"))
