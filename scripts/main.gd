@@ -41,6 +41,9 @@ const GAMES := [
     {"id":"rhythm","title":"Rhythm Rush","genre":"TIMING ARCADE","desc":"Tap glowing notes on the beat line.","color":Color("#fb86d5")}
 ]
 
+var current_tab := "home"
+var shop_category := "themes"
+var profile_section := "overview"
 var content: VBoxContainer
 var lobby_scroll: ScrollContainer
 var lobby_touch_scrolling := true
@@ -107,6 +110,19 @@ var login_streak := 0
 var login_notice := ""
 var login_total_claims := 0
 
+# Titles are earned through existing stats, never purchased.
+var equipped_title := "explorer"
+var title_notice := ""
+const PROFILE_TITLES := [
+    {"id":"explorer", "name":"MiniVerse Explorer", "requirement":"Available from the beginning."},
+    {"id":"regular", "name":"Arcade Regular", "requirement":"Play 10 rounds."},
+    {"id":"champion", "name":"Victory Champion", "requirement":"Win 25 rounds."},
+    {"id":"collector", "name":"Star Collector", "requirement":"Earn 20 best-rating stars."},
+    {"id":"hunter", "name":"Achievement Hunter", "requirement":"Unlock 10 achievements."},
+    {"id":"veteran", "name":"Arcade Veteran", "requirement":"Play 100 rounds."},
+    {"id":"master", "name":"Master of MiniVerse", "requirement":"Master all ten games."}
+]
+
 var tutorial_overlay: Control
 
 const TUTORIALS := {
@@ -139,6 +155,71 @@ func _input(event: InputEvent) -> void:
     if event is InputEventScreenDrag:
         lobby_scroll.scroll_vertical -= int(event.relative.y)
         get_viewport().set_input_as_handled()
+
+func _rewards_hub() -> void:
+    current_tab = "rewards"
+    _shell()
+    _heading("Rewards & Challenges", "Your daily rewards, achievements and events.")
+    content.add_child(_menu_button("DAILY MISSIONS & LOGIN REWARDS", daily_missions, Color("#fbbf24"), "missions"))
+    content.add_child(_menu_button("ACHIEVEMENTS", achievements, Color("#344a9b"), "achievements"))
+    content.add_child(_menu_button("CHALLENGES & EVENTS", events, Color("#344a9b"), "events"))
+
+
+func _bottom_navigation(root: VBoxContainer) -> void:
+    var separator := ColorRect.new()
+    separator.color = _theme_color().darkened(0.3)
+    separator.custom_minimum_size.y = 2
+    root.add_child(separator)
+    var bar := HBoxContainer.new()
+    bar.custom_minimum_size.y = 76
+    bar.add_theme_constant_override("separation", 3)
+    root.add_child(bar)
+    for item in [
+        {"id":"home", "label":"Home", "icon":"home"},
+        {"id":"games", "label":"Games", "icon":"library"},
+        {"id":"rewards", "label":"Rewards", "icon":"achievements"},
+        {"id":"shop", "label":"Shop", "icon":"shop"},
+        {"id":"profile", "label":"Profile", "icon":"profile"}
+    ]:
+        var tab_id: String = str(item["id"])
+        var selected: bool = current_tab == tab_id
+        var button := Button.new()
+        button.text = str(item["label"])
+        button.icon = load("res://assets/ui/menu_%s.png" % str(item["icon"]))
+        button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        button.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+        button.expand_icon = true
+        button.add_theme_constant_override("icon_max_width", 24)
+        button.add_theme_font_size_override("font_size", 11)
+        button.add_theme_color_override("font_color", TEXT if selected else MUTED)
+        button.add_theme_stylebox_override("normal", _style(_theme_color().darkened(0.32) if selected else PANEL2, 10))
+        button.add_theme_stylebox_override("hover", _style(_theme_color().darkened(0.18), 10))
+        button.add_theme_stylebox_override("pressed", _style(_theme_color().darkened(0.42), 10))
+        button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        button.custom_minimum_size.y = 66
+        button.pressed.connect(func():
+            _play_sound(SFX_TAP)
+            match tab_id:
+                "home": home()
+                "games": library()
+                "rewards": _rewards_hub()
+                "shop": shop()
+                "profile": player_profile()
+        )
+        bar.add_child(button)
+
+
+func _section_chips(options: Array[String], selected: String, callback: Callable) -> void:
+    var chips := HFlowContainer.new()
+    chips.add_theme_constant_override("h_separation", 6)
+    chips.add_theme_constant_override("v_separation", 6)
+    content.add_child(chips)
+    for option in options:
+        var chip := _button(option, func(): callback.call(option), _theme_color() if option == selected else PANEL2, 44)
+        chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+        chip.add_theme_font_size_override("font_size", 13)
+        chips.add_child(chip)
+
 
 func _shell():
     tutorial_overlay = null
@@ -226,6 +307,7 @@ func _shell():
     content.add_theme_constant_override("margin_top", 20)
     content.add_theme_constant_override("margin_bottom", 28)
     scroll.add_child(content)
+    _bottom_navigation(root)
 
 func _style(color: Color, radius := 14) -> StyleBoxFlat:
     var s := StyleBoxFlat.new()
@@ -390,89 +472,97 @@ func _effect_purchase(effect_id: String) -> void:
 
 
 func shop() -> void:
+    current_tab = "shop"
     _shell()
     _heading("Cosmetic Shop", "Customize themes, avatars and victory effects. No gameplay advantages.")
     _card("YOUR WALLET", "%d coins available  •  Purchases save automatically." % coins)
     if shop_message != "":
         _card("SHOP UPDATE", shop_message)
-    for item in SHOP_THEMES:
-        var id: String = str(item["id"])
-        var price: int = int(item["price"])
-        var owned: bool = owned_themes.has(id)
-        var equipped: bool = equipped_theme == id
-        var theme_color := Color(str(item["color"]))
-        var card := PanelContainer.new()
-        card.add_theme_stylebox_override("panel", _lobby_card_style(theme_color))
-        content.add_child(card)
-        var column := VBoxContainer.new()
-        column.add_theme_constant_override("separation", 7)
-        card.add_child(column)
-        var preview := ColorRect.new()
-        preview.color = theme_color
-        preview.custom_minimum_size.y = 14
-        preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        column.add_child(preview)
-        var title := Label.new()
-        title.text = str(item["name"]) + ("  -  EQUIPPED" if equipped else "")
-        title.add_theme_color_override("font_color", TEXT)
-        title.add_theme_font_size_override("font_size", 19)
-        column.add_child(title)
-        var description := Label.new()
-        description.text = str(item["description"]) + ("  •  Owned" if owned else "  •  %d coins" % price)
-        description.add_theme_color_override("font_color", MUTED)
-        column.add_child(description)
-        var button_label := "EQUIPPED" if equipped else ("EQUIP" if owned else "BUY FOR %d COINS" % price)
-        var purchase := _button(button_label, func(): _shop_purchase(id), theme_color)
-        purchase.disabled = equipped
-        column.add_child(purchase)
-    _heading("Collectible Avatars", "Unlock a character to display beside your lobby progress.")
-    for item in SHOP_AVATARS:
-        var avatar_id: String = str(item["id"])
-        var avatar_price: int = int(item["price"])
-        var avatar_owned: bool = owned_avatars.has(avatar_id)
-        var avatar_equipped: bool = equipped_avatar == avatar_id
-        var avatar_card := PanelContainer.new()
-        avatar_card.add_theme_stylebox_override("panel", _lobby_card_style(Color(str(item["color"]))))
-        content.add_child(avatar_card)
-        var avatar_row := HBoxContainer.new()
-        avatar_row.add_theme_constant_override("separation", 12)
-        avatar_card.add_child(avatar_row)
-        avatar_row.add_child(_avatar_image(avatar_id, 72))
-        var avatar_column := VBoxContainer.new()
-        avatar_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        avatar_row.add_child(avatar_column)
-        var avatar_title := Label.new()
-        avatar_title.text = str(item["name"]) + ("  -  EQUIPPED" if avatar_equipped else "")
-        avatar_title.add_theme_color_override("font_color", TEXT)
-        avatar_column.add_child(avatar_title)
-        var avatar_button := _button("EQUIPPED" if avatar_equipped else ("EQUIP" if avatar_owned else "BUY FOR %d COINS" % avatar_price), func(): _avatar_purchase(avatar_id), Color(str(item["color"])), 52)
-        avatar_button.disabled = avatar_equipped
-        avatar_column.add_child(avatar_button)
-    _heading("Victory Effects", "Choose the celebration shown after winning a level.")
-    for item in SHOP_EFFECTS:
-        var effect_id: String = str(item["id"])
-        var effect_price: int = int(item["price"])
-        var effect_owned: bool = owned_effects.has(effect_id)
-        var effect_equipped: bool = equipped_effect == effect_id
-        var effect_card := PanelContainer.new()
-        effect_card.add_theme_stylebox_override("panel", _lobby_card_style(Color(str(item["color"]))))
-        content.add_child(effect_card)
-        var effect_column := VBoxContainer.new()
-        effect_column.add_theme_constant_override("separation", 6)
-        effect_card.add_child(effect_column)
-        var effect_title := Label.new()
-        effect_title.text = str(item["name"]) + ("  -  EQUIPPED" if effect_equipped else "")
-        effect_title.add_theme_color_override("font_color", Color(str(item["color"])))
-        effect_title.add_theme_font_size_override("font_size", 19)
-        effect_column.add_child(effect_title)
-        var effect_description := Label.new()
-        effect_description.text = str(item["description"])
-        effect_description.add_theme_color_override("font_color", MUTED)
-        effect_column.add_child(effect_description)
-        var effect_button := _button("EQUIPPED" if effect_equipped else ("EQUIP" if effect_owned else "BUY FOR %d COINS" % effect_price), func(): _effect_purchase(effect_id), Color(str(item["color"])), 52)
-        effect_button.disabled = effect_equipped
-        effect_column.add_child(effect_button)
-    content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "home"))
+    _section_chips(["Themes", "Avatars", "Effects"], shop_category.capitalize(), func(value: String):
+        shop_category = value.to_lower()
+        shop()
+    )
+    if shop_category == "themes":
+        for item in SHOP_THEMES:
+            var id: String = str(item["id"])
+            var price: int = int(item["price"])
+            var owned: bool = owned_themes.has(id)
+            var equipped: bool = equipped_theme == id
+            var theme_color := Color(str(item["color"]))
+            var card := PanelContainer.new()
+            card.add_theme_stylebox_override("panel", _lobby_card_style(theme_color))
+            content.add_child(card)
+            var column := VBoxContainer.new()
+            column.add_theme_constant_override("separation", 7)
+            card.add_child(column)
+            var preview := ColorRect.new()
+            preview.color = theme_color
+            preview.custom_minimum_size.y = 14
+            preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+            column.add_child(preview)
+            var title := Label.new()
+            title.text = str(item["name"]) + ("  -  EQUIPPED" if equipped else "")
+            title.add_theme_color_override("font_color", TEXT)
+            title.add_theme_font_size_override("font_size", 19)
+            column.add_child(title)
+            var description := Label.new()
+            description.text = str(item["description"]) + ("  •  Owned" if owned else "  •  %d coins" % price)
+            description.add_theme_color_override("font_color", MUTED)
+            column.add_child(description)
+            var button_label := "EQUIPPED" if equipped else ("EQUIP" if owned else "BUY FOR %d COINS" % price)
+            var purchase := _button(button_label, func(): _shop_purchase(id), theme_color)
+            purchase.disabled = equipped
+            column.add_child(purchase)
+    if shop_category == "avatars":
+        _heading("Collectible Avatars", "Unlock a character to display beside your lobby progress.")
+        for item in SHOP_AVATARS:
+            var avatar_id: String = str(item["id"])
+            var avatar_price: int = int(item["price"])
+            var avatar_owned: bool = owned_avatars.has(avatar_id)
+            var avatar_equipped: bool = equipped_avatar == avatar_id
+            var avatar_card := PanelContainer.new()
+            avatar_card.add_theme_stylebox_override("panel", _lobby_card_style(Color(str(item["color"]))))
+            content.add_child(avatar_card)
+            var avatar_row := HBoxContainer.new()
+            avatar_row.add_theme_constant_override("separation", 12)
+            avatar_card.add_child(avatar_row)
+            avatar_row.add_child(_avatar_image(avatar_id, 72))
+            var avatar_column := VBoxContainer.new()
+            avatar_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+            avatar_row.add_child(avatar_column)
+            var avatar_title := Label.new()
+            avatar_title.text = str(item["name"]) + ("  -  EQUIPPED" if avatar_equipped else "")
+            avatar_title.add_theme_color_override("font_color", TEXT)
+            avatar_column.add_child(avatar_title)
+            var avatar_button := _button("EQUIPPED" if avatar_equipped else ("EQUIP" if avatar_owned else "BUY FOR %d COINS" % avatar_price), func(): _avatar_purchase(avatar_id), Color(str(item["color"])), 52)
+            avatar_button.disabled = avatar_equipped
+            avatar_column.add_child(avatar_button)
+    if shop_category == "effects":
+        _heading("Victory Effects", "Choose the celebration shown after winning a level.")
+        for item in SHOP_EFFECTS:
+            var effect_id: String = str(item["id"])
+            var effect_price: int = int(item["price"])
+            var effect_owned: bool = owned_effects.has(effect_id)
+            var effect_equipped: bool = equipped_effect == effect_id
+            var effect_card := PanelContainer.new()
+            effect_card.add_theme_stylebox_override("panel", _lobby_card_style(Color(str(item["color"]))))
+            content.add_child(effect_card)
+            var effect_column := VBoxContainer.new()
+            effect_column.add_theme_constant_override("separation", 6)
+            effect_card.add_child(effect_column)
+            var effect_title := Label.new()
+            effect_title.text = str(item["name"]) + ("  -  EQUIPPED" if effect_equipped else "")
+            effect_title.add_theme_color_override("font_color", Color(str(item["color"])))
+            effect_title.add_theme_font_size_override("font_size", 19)
+            effect_column.add_child(effect_title)
+            var effect_description := Label.new()
+            effect_description.text = str(item["description"])
+            effect_description.add_theme_color_override("font_color", MUTED)
+            effect_column.add_child(effect_description)
+            var effect_button := _button("EQUIPPED" if effect_equipped else ("EQUIP" if effect_owned else "BUY FOR %d COINS" % effect_price), func(): _effect_purchase(effect_id), Color(str(item["color"])), 52)
+            effect_button.disabled = effect_equipped
+            effect_column.add_child(effect_button)
+
 
 func _heading(title: String, subtitle := ""):
     var box := VBoxContainer.new()
@@ -527,7 +617,109 @@ func _profile_favorite() -> String:
     return _game_name(favorite_id) if favorite_id != "" else "Not yet discovered"
 
 
+# Mastery is calculated from existing wins, so old saves retain their progress.
+const MASTERY_TARGETS := [0, 3, 10, 25, 50]
+const MASTERY_NAMES := ["Newcomer", "Apprentice", "Specialist", "Expert", "Master"]
+
+func _mastery_tier(wins: int) -> int:
+    var tier := 0
+    for i in range(MASTERY_TARGETS.size()):
+        if wins >= MASTERY_TARGETS[i]:
+            tier = i
+    return tier
+
+
+func _profile_progress(label_text: String, current: int, target: int, accent: Color) -> void:
+    var wrapper := VBoxContainer.new()
+    wrapper.add_theme_constant_override("separation", 4)
+    content.add_child(wrapper)
+    var caption := Label.new()
+    caption.text = "%s  (%d / %d)" % [label_text, mini(current, target), target]
+    caption.add_theme_color_override("font_color", TEXT)
+    caption.add_theme_font_size_override("font_size", 14)
+    wrapper.add_child(caption)
+    var bar := ProgressBar.new()
+    bar.min_value = 0.0
+    bar.max_value = float(maxi(target, 1))
+    bar.value = float(mini(current, target))
+    bar.show_percentage = false
+    bar.custom_minimum_size = Vector2(0, 14)
+    var track := StyleBoxFlat.new()
+    track.bg_color = Color("#17213b")
+    track.set_corner_radius_all(7)
+    bar.add_theme_stylebox_override("background", track)
+    var fill := StyleBoxFlat.new()
+    fill.bg_color = accent
+    fill.set_corner_radius_all(7)
+    bar.add_theme_stylebox_override("fill", fill)
+    wrapper.add_child(bar)
+
+
+func _profile_milestone(title_text: String, description: String, achieved: bool) -> void:
+    var status := "COMPLETED" if achieved else "IN PROGRESS"
+    _card(("[DONE] " if achieved else "[   ] ") + title_text, description + "\n" + status)
+
+
+func _profile_total_stars() -> int:
+    var stars := 0
+    for game in GAMES:
+        stars += int(best_stars.get(str(game["id"]), 0))
+    return stars
+
+
+func _profile_achievement_count() -> int:
+    var count := 0
+    for achievement_id in achievement_claimed.keys():
+        if bool(achievement_claimed[achievement_id]):
+            count += 1
+    return count
+
+
+func _profile_master_count() -> int:
+    var count := 0
+    for game in GAMES:
+        if int(game_win_counts.get(str(game["id"]), 0)) >= 50:
+            count += 1
+    return count
+
+
+func _title_unlocked(title_id: String) -> bool:
+    match title_id:
+        "explorer":
+            return true
+        "regular":
+            return total_games_played >= 10
+        "champion":
+            return total_wins >= 25
+        "collector":
+            return _profile_total_stars() >= 20
+        "hunter":
+            return _profile_achievement_count() >= 10
+        "veteran":
+            return total_games_played >= 100
+        "master":
+            return _profile_master_count() >= GAMES.size()
+    return false
+
+
+func _title_display_name(title_id: String) -> String:
+    for item in PROFILE_TITLES:
+        if str(item["id"]) == title_id:
+            return str(item["name"])
+    return "MiniVerse Explorer"
+
+
+func _equip_profile_title(title_id: String) -> void:
+    if not _title_unlocked(title_id):
+        return
+    equipped_title = title_id
+    title_notice = "Now displaying: %s" % _title_display_name(title_id)
+    _save()
+    player_profile()
+
+
 func player_profile() -> void:
+    current_tab = "profile"
     _shell()
     _heading("Player Profile", "Your MiniVerse journey, all in one place.")
     var avatar_panel := PanelContainer.new()
@@ -541,7 +733,9 @@ func player_profile() -> void:
     profile_details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     avatar_row.add_child(profile_details)
     var profile_title := Label.new()
-    profile_title.text = "MINIVERSE EXPLORER"
+    if not _title_unlocked(equipped_title):
+        equipped_title = "explorer"
+    profile_title.text = _title_display_name(equipped_title).to_upper()
     profile_title.add_theme_color_override("font_color", _theme_color().lightened(0.5))
     profile_title.add_theme_font_size_override("font_size", 19)
     profile_details.add_child(profile_title)
@@ -562,21 +756,58 @@ func player_profile() -> void:
     for game in GAMES:
         total_stars += int(best_stars.get(str(game["id"]), 0))
     _card("COLLECTION & REWARDS", "Achievements: %d / %d\nBest stars earned: %d / 30\nThemes owned: %d / %d\nAvatars owned: %d / %d\nVictory effects owned: %d / %d\nDaily login claims: %d" % [unlocked_achievements, ACHIEVEMENT_INFO.size(), total_stars, owned_themes.size(), SHOP_THEMES.size(), owned_avatars.size(), SHOP_AVATARS.size(), owned_effects.size(), SHOP_EFFECTS.size(), login_total_claims])
-    _heading("Game Statistics", "Records and progress for each of your ten games.")
-    for game in GAMES:
-        var id: String = str(game["id"])
-        var played: int = int(game_play_counts.get(id, 0))
-        var wins: int = int(game_win_counts.get(id, 0))
-        var record: int = int(best_scores.get(id, 0))
-        var stars: int = int(best_stars.get(id, 0))
-        var cleared: int = maxi(Difficulty.level(id) - 1, 0)
-        _card(str(game["title"]), "Rounds: %d  |  Wins: %d  |  Win rate: %s\nBest score: %d  |  Best stars: %d / 3\nLevels cleared: %d" % [played, wins, _stat_rate(wins, played), record, stars, cleared])
-        content.add_child(_button("PLAY %s" % str(game["title"]).to_upper(), func(): launch(id), Color("#344a9b"), 44))
-    content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "back"))
+    _section_chips(["Overview", "Titles", "Milestones", "Games"], profile_section.capitalize(), func(value: String):
+        profile_section = value.to_lower()
+        player_profile()
+    )
+    if profile_section == "titles":
+        _heading("Player Titles", "Earn titles through gameplay, then choose one to display on your profile.")
+        if title_notice != "":
+            _card("TITLE EQUIPPED", title_notice)
+        for title_item in PROFILE_TITLES:
+            var title_id: String = str(title_item["id"])
+            var title_name: String = str(title_item["name"])
+            var title_available: bool = _title_unlocked(title_id)
+            var title_equipped: bool = equipped_title == title_id
+            _card(title_name + ("  -  EQUIPPED" if title_equipped else ""), str(title_item["requirement"]) + ("  •  Unlocked" if title_available else "  •  Locked"))
+            if title_available and not title_equipped:
+                content.add_child(_button("EQUIP " + title_name.to_upper(), func(): _equip_profile_title(title_id), Color("#344a9b"), 48))
+    if profile_section == "milestones":
+        _heading("Personal Milestones", "Track the goals you've reached across MiniVerse.")
+        _profile_milestone("First Steps", "Finish 10 mini-game rounds.", total_games_played >= 10)
+        _profile_milestone("Winning Habit", "Clear 25 levels across all games.", total_wins >= 25)
+        _profile_milestone("Star Collector", "Collect 20 best-rating stars across the ten games.", total_stars >= 20)
+        _profile_milestone("Achievement Hunter", "Unlock 10 achievements.", unlocked_achievements >= 10)
+        var mastered_games := 0
+        for mastered_game in GAMES:
+            if int(game_win_counts.get(str(mastered_game["id"]), 0)) >= 50:
+                mastered_games += 1
+        _profile_milestone("Master of MiniVerse", "Reach Master rank in all ten mini-games.", mastered_games >= GAMES.size())
+    if profile_section == "games":
+        _heading("Game Mastery", "Win rounds to climb five mastery ranks in each game.")
+        _heading("Game Statistics", "Records and progress for each of your ten games.")
+        for game in GAMES:
+            var id: String = str(game["id"])
+            var played: int = int(game_play_counts.get(id, 0))
+            var wins: int = int(game_win_counts.get(id, 0))
+            var record: int = int(best_scores.get(id, 0))
+            var stars: int = int(best_stars.get(id, 0))
+            var cleared: int = maxi(Difficulty.level(id) - 1, 0)
+            _card(str(game["title"]), "Rounds: %d  |  Wins: %d  |  Win rate: %s\nBest score: %d  |  Best stars: %d / 3\nLevels cleared: %d" % [played, wins, _stat_rate(wins, played), record, stars, cleared])
+            var tier: int = _mastery_tier(wins)
+            var mastery_title := "%s  -  %s" % [str(game["title"]), MASTERY_NAMES[tier]]
+            if tier >= MASTERY_TARGETS.size() - 1:
+                _profile_progress(mastery_title + " (MAX RANK)", wins, 50, _theme_color())
+            else:
+                var next_target: int = MASTERY_TARGETS[tier + 1]
+                _profile_progress(mastery_title + " - Next: " + MASTERY_NAMES[tier + 1], wins, next_target, _theme_color())
+            content.add_child(_button("PLAY %s" % str(game["title"]).to_upper(), func(): launch(id), Color("#344a9b"), 44))
+
 
 
 func home():
     Difficulty.clear_retry_level(game_id)
+    current_tab = "home"
     _shell()
     # Mobile-first welcome panel with custom procedural fantasy artwork.
     var hero := PanelContainer.new()
@@ -619,8 +850,11 @@ func home():
     profile_label.add_theme_color_override("font_color", _theme_color().lightened(0.45))
     profile.add_child(profile_label)
     content.add_child(_menu_button("PLAY A RANDOM GAME", _random_game, Color("#36e58a"), "play", 60))
-    content.add_child(_menu_button("PLAY TODAY'S CHALLENGE", _daily_challenge, Color("#fbbf24"), "daily", 54))
-    content.add_child(_menu_button("DAILY MISSIONS", daily_missions, Color("#344a9b"), "missions", 54))
+    var quick_actions := HBoxContainer.new()
+    quick_actions.add_theme_constant_override("separation", 8)
+    content.add_child(quick_actions)
+    quick_actions.add_child(_menu_button("DAILY", _daily_challenge, Color("#fbbf24"), "daily", 54))
+    quick_actions.add_child(_menu_button("MISSIONS", daily_missions, Color("#344a9b"), "missions", 54))
     _heading("Recently Played", "Your last three games, ready to jump back into.")
     var shown := 0
     for recent_id in recent_games:
@@ -630,13 +864,8 @@ func home():
             shown += 1
     if shown == 0:
         _card("YOUR ADVENTURE STARTS HERE", "Play a game from the library and your three most recently played games will appear here.")
-    content.add_child(_menu_button("OPEN GAME LIBRARY", library, Color("#344a9b"), "library"))
-    content.add_child(_menu_button("CHALLENGES & EVENTS", events, Color("#344a9b"), "events"))
-    content.add_child(_menu_button("PLAYER PROFILE", player_profile, Color("#344a9b"), "profile"))
-    content.add_child(_menu_button("ACHIEVEMENTS", achievements, Color("#344a9b"), "achievements"))
-    content.add_child(_menu_button("COSMETIC SHOP", shop, Color("#344a9b"), "shop"))
-    content.add_child(_menu_button("SETTINGS", settings, Color("#344a9b"), "settings"))
-    _card("YOUR PROGRESS", "Level %d  ·  %d XP  ·  %d coins  ·  %d personal records" % [level, xp, coins, best_scores.size()])
+    content.add_child(_menu_button("BROWSE ALL GAMES", library, Color("#344a9b"), "library", 54))
+    content.add_child(_menu_button("SETTINGS", settings, PANEL2, "settings", 48))
 
 func _game_card(g: Dictionary) -> PanelContainer:
     var card := PanelContainer.new()
@@ -703,6 +932,7 @@ func _game_card(g: Dictionary) -> PanelContainer:
     return card
 
 func library():
+    current_tab = "games"
     _shell()
     _heading("Game Library", "10 games · Find your next favorite.")
     var filters := HFlowContainer.new()
@@ -723,7 +953,7 @@ func library():
             content.add_child(_game_card(g))
             count += 1
     _card("%d GAMES" % count, "Choose any game to play instantly.")
-    content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "home"))
+
 
 func _matches_filter(g: Dictionary, category: String) -> bool:
     if category == "ALL":
@@ -908,6 +1138,8 @@ func reset_progress():
     login_streak = 0
     login_total_claims = 0
     login_notice = ""
+    equipped_title = "explorer"
+    title_notice = ""
     mission_day = ""
     mission_progress = {}
     mission_claimed = {}
@@ -1724,7 +1956,7 @@ func _game_name(id: String) -> String:
 func _save():
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title}))
         f.close()
 
 func _load_save():
@@ -1737,6 +1969,7 @@ func _load_save():
         login_last_claim = str(data.get("login_last_claim", ""))
         login_streak = int(data.get("login_streak", 0))
         login_total_claims = int(data.get("login_total_claims", 0))
+        equipped_title = str(data.get("equipped_title", "explorer"))
         mission_day = str(data.get("mission_day", ""))
         mission_progress = data.get("mission_progress", {})
         mission_claimed = data.get("mission_claimed", {})
