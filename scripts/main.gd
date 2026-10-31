@@ -242,6 +242,14 @@ func _button(text: String, cb: Callable, color := ACCENT, height := 56) -> Butto
     TouchFeedback.attach(b)
     return b
 
+func _menu_button(label: String, cb: Callable, color: Color, icon_name: String, height: int = 56) -> Button:
+    var button := _button(label, cb, color, height)
+    button.icon = load("res://assets/ui/menu_%s.png" % icon_name)
+    button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
+    button.expand_icon = true
+    button.add_theme_constant_override("icon_max_width", 30)
+    return button
+
 func _play_sound(stream: AudioStream) -> void:
     if sound_enabled and is_instance_valid(sound_player):
         sound_player.stream = stream
@@ -316,8 +324,8 @@ func home():
     subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     subtitle.add_theme_color_override("font_color", Color("#e1e7ff"))
     welcome.add_child(subtitle)
-    content.add_child(_button("▶  PLAY A RANDOM GAME", _random_game, Color("#36e58a"), 60))
-    content.add_child(_button("☀  PLAY TODAY'S CHALLENGE", _daily_challenge, Color("#fbbf24"), 54))
+    content.add_child(_menu_button("PLAY A RANDOM GAME", _random_game, Color("#36e58a"), "play", 60))
+    content.add_child(_menu_button("PLAY TODAY'S CHALLENGE", _daily_challenge, Color("#fbbf24"), "daily", 54))
     _heading("Recently Played", "Your last three games, ready to jump back into.")
     var shown := 0
     for recent_id in recent_games:
@@ -327,10 +335,10 @@ func home():
             shown += 1
     if shown == 0:
         _card("YOUR ADVENTURE STARTS HERE", "Play a game from the library and your three most recently played games will appear here.")
-    content.add_child(_button("▦  OPEN GAME LIBRARY", library, Color("#344a9b")))
-    content.add_child(_button("🏆  CHALLENGES & EVENTS", events, Color("#344a9b")))
-    content.add_child(_button("🏅  ACHIEVEMENTS", achievements, Color("#344a9b")))
-    content.add_child(_button("⚙  SETTINGS", settings, Color("#344a9b")))
+    content.add_child(_menu_button("OPEN GAME LIBRARY", library, Color("#344a9b"), "library"))
+    content.add_child(_menu_button("CHALLENGES & EVENTS", events, Color("#344a9b"), "events"))
+    content.add_child(_menu_button("ACHIEVEMENTS", achievements, Color("#344a9b"), "achievements"))
+    content.add_child(_menu_button("SETTINGS", settings, Color("#344a9b"), "settings"))
     _card("YOUR PROGRESS", "Level %d  ·  %d XP  ·  %d coins  ·  %d personal records" % [level, xp, coins, best_scores.size()])
 
 func _game_card(g: Dictionary) -> PanelContainer:
@@ -418,7 +426,7 @@ func library():
             content.add_child(_game_card(g))
             count += 1
     _card("%d GAMES" % count, "Choose any game to play instantly.")
-    content.add_child(_button("BACK TO HOME", home, PANEL2))
+    content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "home"))
 
 func _matches_filter(g: Dictionary, category: String) -> bool:
     if category == "ALL":
@@ -441,7 +449,7 @@ func events():
     content.add_child(_button("▶  PLAY DAILY CHALLENGE", _daily_challenge, Color("#fbbf24")))
     _card("🏆 MINIVERSE CUP", "Weekly score competitions will rotate between mini-games after an online backend is added.")
     _card("✦ MINIVERSE FESTIVAL", "Seasonal themes, cosmetic rewards, and special games are planned for future versions.")
-    content.add_child(_button("← BACK TO HOME", home, PANEL2))
+    content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "back"))
 
 const ACHIEVEMENT_INFO := [
     {"id":"first_play", "title":"First Steps", "desc":"Play your first mini-game.", "coins":25, "xp":30},
@@ -493,7 +501,7 @@ func achievements() -> void:
         var heading: String = ("UNLOCKED  •  " if unlocked else "LOCKED  •  ") + str(item["title"])
         var details: String = str(item["desc"]) + "\\nReward: %d coins + %d XP" % [int(item["coins"]), int(item["xp"])]
         _card(heading, details)
-    content.add_child(_button("BACK TO HOME", home, PANEL2))
+    content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "home"))
 
 func settings():
     _shell()
@@ -507,7 +515,7 @@ func settings():
     content.add_child(_button("CHOOSE ANOTHER GAME TO RESET", _reset_level_menu, Color("#344a9b")))
     content.add_child(_button("RESET ALL GAME LEVELS", _confirm_reset_levels, Color("#f9738f")))
     content.add_child(_button("RESET LOCAL PROGRESS", _confirm_reset_progress, Color("#f9738f")))
-    content.add_child(_button("← BACK TO HOME", home, PANEL2))
+    content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "back"))
 
 func _tutorial_menu() -> void:
     _shell()
@@ -515,7 +523,7 @@ func _tutorial_menu() -> void:
     for g in GAMES:
         var id: String = str(g.id)
         content.add_child(_button("HOW TO PLAY: %s" % str(g.title), func(): _replay_tutorial(id), Color("#344a9b")))
-    content.add_child(_button("BACK TO SETTINGS", settings, PANEL2))
+    content.add_child(_menu_button("SETTINGS", settings, PANEL2, "settings"))
 
 func _replay_tutorial(id: String) -> void:
     seen_tutorials.erase(id)
@@ -539,7 +547,7 @@ func _reset_level_menu() -> void:
     for g in GAMES:
         var id: String = str(g.id)
         content.add_child(_button("%s  •  Level %d" % [str(g.title), Difficulty.level(id)], func(): _reset_game_level(id), Color("#344a9b")))
-    content.add_child(_button("← BACK TO SETTINGS", settings, PANEL2))
+    content.add_child(_menu_button("SETTINGS", settings, PANEL2, "settings"))
 
 func _confirm_reset_levels() -> void:
     _shell()
@@ -967,7 +975,7 @@ func _mount_game(g: Control):
     progress_header.add_theme_color_override("font_color", Color("#ffe29e"))
     content.add_child(progress_header)
     # Keep a visible way back to the lobby while playing any mini-game.
-    content.add_child(_button("←  RETURN TO LOBBY", home, PANEL2, 46))
+    content.add_child(_menu_button("RETURN TO LOBBY", home, PANEL2, "back", 46))
     # ScrollContainer content must have a real minimum height; otherwise nested
     # game controls can collapse to almost zero height on mobile-sized viewports.
     g.custom_minimum_size = Vector2(0, 820)
@@ -1202,7 +1210,7 @@ func _results(id: String, score: int, reward: int, record: bool, earned_xp: int,
         content.add_child(next_button)
     content.add_child(_button("RETRY LEVEL %d" % played_level, func(): _retry_level(id, played_level), PANEL2))
 
-    content.add_child(_button("BACK TO MINIVERSE", home, PANEL2))
+    content.add_child(_menu_button("BACK TO MINIVERSE", home, PANEL2, "home"))
 
 func _result_tip(id: String, passed: bool, stars_earned: int) -> String:
     if passed:
