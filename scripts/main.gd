@@ -107,6 +107,11 @@ var weekly_progress: Dictionary = {}
 var weekly_claimed: Dictionary = {}
 var weekly_games: Dictionary = {}
 var weekly_notice := ""
+# A daily challenge streak advances only when all three daily missions
+# have been claimed. Rewards are granted once per completed day.
+var challenge_streak := 0
+var challenge_streak_last_day := ""
+var challenge_streak_notice := ""
 
 const MISSION_GAMES := ["fast", "merge", "stack", "memory", "whack", "sort", "snake", "dots", "hopper", "rhythm"]
 
@@ -163,12 +168,53 @@ func _input(event: InputEvent) -> void:
         lobby_scroll.scroll_vertical -= int(event.relative.y)
         get_viewport().set_input_as_handled()
 
+func _daily_rewards_ready() -> int:
+    _mission_reset_if_needed()
+    var ready: int = 0
+    for mission in _mission_definitions():
+        var key: String = str(mission["id"])
+        if not mission_claimed.has(key) and int(mission_progress.get(key, 0)) >= int(mission["target"]):
+            ready += 1
+    if _login_can_claim():
+        ready += 1
+    return ready
+
+
+func _weekly_rewards_ready() -> int:
+    _weekly_reset_if_needed()
+    var ready: int = 0
+    for challenge in _weekly_definitions():
+        var key: String = str(challenge["id"])
+        if not weekly_claimed.has(key) and int(weekly_progress.get(key, 0)) >= int(challenge["target"]):
+            ready += 1
+    return ready
+
+
+func _rewards_ready_count() -> int:
+    return _daily_rewards_ready() + _weekly_rewards_ready()
+
+
 func _rewards_hub() -> void:
     current_tab = "rewards"
     _shell()
     _heading("Rewards & Challenges", "Your daily rewards, achievements and events.")
-    content.add_child(_menu_button("WEEKLY CHALLENGES", weekly_challenges, Color("#34d399"), "missions"))
-    content.add_child(_menu_button("DAILY MISSIONS & LOGIN REWARDS", daily_missions, Color("#fbbf24"), "missions"))
+    var daily_ready: int = _daily_rewards_ready()
+    var weekly_ready: int = _weekly_rewards_ready()
+    var total_ready: int = daily_ready + weekly_ready
+    if total_ready > 0:
+        _card("REWARDS READY TO CLAIM", "%d reward%s waiting! Open Daily Missions or Weekly Challenges to collect them." % [total_ready, "" if total_ready == 1 else "s"])
+    else:
+        _card("ALL CAUGHT UP", "Keep playing to complete missions and unlock more rewards.")
+    if challenge_streak_last_day != "":
+        _card("CHALLENGE STREAK", "%d completed day(s). Claim all three daily missions to keep it going!" % challenge_streak)
+    var weekly_label: String = "WEEKLY CHALLENGES"
+    if weekly_ready > 0:
+        weekly_label += "  (%d READY)" % weekly_ready
+    var daily_label: String = "DAILY MISSIONS & LOGIN REWARDS"
+    if daily_ready > 0:
+        daily_label += "  (%d READY)" % daily_ready
+    content.add_child(_menu_button(weekly_label, weekly_challenges, Color("#34d399"), "missions"))
+    content.add_child(_menu_button(daily_label, daily_missions, Color("#fbbf24"), "missions"))
     content.add_child(_menu_button("ACHIEVEMENTS", achievements, Color("#344a9b"), "achievements"))
     content.add_child(_menu_button("CHALLENGES & EVENTS", events, Color("#344a9b"), "events"))
 
@@ -193,6 +239,10 @@ func _bottom_navigation(root: VBoxContainer) -> void:
         var selected: bool = current_tab == tab_id
         var button := Button.new()
         button.text = str(item["label"])
+        if tab_id == "rewards":
+            var ready_count: int = _rewards_ready_count()
+            if ready_count > 0:
+                button.text = "Earn %d" % mini(ready_count, 9)
         button.icon = load("res://assets/ui/menu_%s.png" % str(item["icon"]))
         button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
         button.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
@@ -1787,6 +1837,9 @@ func weekly_challenges() -> void:
     current_tab = "rewards"
     _shell()
     _heading("Weekly Challenges", "Three bigger goals to complete before the next Monday.")
+    var weekly_ready: int = _weekly_rewards_ready()
+    if weekly_ready > 0:
+        _card("READY TO CLAIM", "%d weekly reward%s available below." % [weekly_ready, "" if weekly_ready == 1 else "s"])
     _card("THIS WEEK", "Started Monday %s. Progress resets next Monday (device local time)." % weekly_key)
     if weekly_notice != "":
         _card("REWARD CLAIMED", weekly_notice)
@@ -1848,6 +1901,25 @@ func _mission_record(id: String, passed: bool) -> void:
         mission_progress[key] = mini(int(mission_progress.get(key, 0)) + 1, int(mission["target"]))
 
 
+func _challenge_streak_reward() -> void:
+    if challenge_streak_last_day == mission_day:
+        return
+    for mission in _mission_definitions():
+        if not mission_claimed.has(str(mission["id"])):
+            return
+    var today: String = mission_day
+    var yesterday: String = Time.get_date_string_from_unix_time(Time.get_unix_time_from_datetime_string(today + "T12:00:00") - 86400.0)
+    challenge_streak = challenge_streak + 1 if challenge_streak_last_day == yesterday else 1
+    challenge_streak_last_day = today
+    var coins_earned: int = mini(25 * challenge_streak, 175)
+    var xp_earned: int = mini(30 * challenge_streak, 210)
+    coins += coins_earned
+    xp += xp_earned
+    level = int(xp / 100) + 1
+    challenge_streak_notice = "Day %d streak complete! +%d coins and +%d XP." % [challenge_streak, coins_earned, xp_earned]
+    _play_sound(SFX_COLLECT)
+
+
 func _mission_claim(key: String) -> void:
     _mission_reset_if_needed()
     for mission in _mission_definitions():
@@ -1860,6 +1932,7 @@ func _mission_claim(key: String) -> void:
         xp += int(mission["xp"])
         level = int(xp / 100) + 1
         mission_notice = "Claimed %s: +%d coins and +%d XP!" % [str(mission["title"]), int(mission["coins"]), int(mission["xp"])]
+        _challenge_streak_reward()
         _play_sound(SFX_COLLECT)
         _save()
         daily_missions()
@@ -1870,8 +1943,21 @@ func daily_missions() -> void:
     _mission_reset_if_needed()
     _shell()
     _heading("Daily Missions", "Three fresh challenges each day. Complete them to claim extra rewards!")
+    var daily_ready: int = _daily_rewards_ready()
+    if daily_ready > 0:
+        _card("REWARDS WAITING", "%d daily reward%s ready to claim, including today's login reward if available." % [daily_ready, "" if daily_ready == 1 else "s"])
     _login_calendar()
-    _heading("Today's Missions", "Complete these three objectives for bonus rewards.")
+    _heading("Today's Missions", "Claim all three missions today to build your challenge streak.")
+    var streak_display: int = challenge_streak
+    var yesterday: String = Time.get_date_string_from_unix_time(Time.get_unix_time_from_datetime_string(mission_day + "T12:00:00") - 86400.0)
+    if challenge_streak_last_day != mission_day and challenge_streak_last_day != yesterday:
+        streak_display = 0
+    var next_streak: int = streak_display + (0 if challenge_streak_last_day == mission_day else 1)
+    var next_coins: int = mini(25 * next_streak, 175)
+    var next_xp: int = mini(30 * next_streak, 210)
+    _card("DAILY CHALLENGE STREAK", "%d consecutive completed days\\n%s" % [streak_display, "Today's streak bonus already claimed!" if challenge_streak_last_day == mission_day else "Complete and claim all 3 missions: +%d coins and +%d XP" % [next_coins, next_xp]])
+    if challenge_streak_notice != "":
+        _card("STREAK REWARD", challenge_streak_notice)
     _card("TODAY: %s" % mission_day, "Missions reset on your device's next local calendar day.")
     if mission_notice != "":
         _card("REWARD CLAIMED", mission_notice)
@@ -2087,7 +2173,7 @@ func _game_name(id: String) -> String:
 func _save():
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day}))
         f.close()
 
 func _load_save():
@@ -2105,6 +2191,8 @@ func _load_save():
         weekly_progress = data.get("weekly_progress", {})
         weekly_claimed = data.get("weekly_claimed", {})
         weekly_games = data.get("weekly_games", {})
+        challenge_streak = int(data.get("challenge_streak", 0))
+        challenge_streak_last_day = str(data.get("challenge_streak_last_day", ""))
         _weekly_reset_if_needed()
         mission_day = str(data.get("mission_day", ""))
         mission_progress = data.get("mission_progress", {})
