@@ -15,6 +15,9 @@ const MemoryMatch = preload("res://scripts/memory_match.gd")
 const WhackAMole = preload("res://scripts/whack_a_mole.gd")
 const ColorSort = preload("res://scripts/color_sort.gd")
 const NeonSnake = preload("res://scripts/neon_snake.gd")
+const NeonDodge = preload("res://scripts/neon_dodge.gd")
+const TileSlide = preload("res://scripts/tile_slide.gd")
+const FruitCatch = preload("res://scripts/fruit_catch.gd")
 const ConnectDots = preload("res://scripts/connect_dots.gd")
 const Difficulty = preload("res://scripts/difficulty.gd")
 const SkyHopper = preload("res://scripts/sky_hopper.gd")
@@ -38,11 +41,14 @@ const GAMES := [
     {"id":"snake","title":"Neon Snake","genre":"ARCADE","desc":"Collect glowing stars and grow your snake.","color":Color("#58edc4")},
     {"id":"dots","title":"Connect the Dots","genre":"PUZZLE","desc":"Draw glowing paths between matching colors.","color":Color("#ff79b2")},
     {"id":"hopper","title":"Sky Hopper","genre":"ARCADE PLATFORMER","desc":"Hop between floating islands and collect stars.","color":Color("#9bd8ff")},
-    {"id":"rhythm","title":"Rhythm Rush","genre":"TIMING ARCADE","desc":"Tap glowing notes on the beat line.","color":Color("#fb86d5")}
+    {"id":"rhythm","title":"Rhythm Rush","genre":"TIMING ARCADE","desc":"Tap glowing notes on the beat line.","color":Color("#fb86d5")},
+    {"id":"dodge","title":"Neon Dodge","genre":"REFLEX SURVIVAL","desc":"Drag your glowing orb to dodge falling hazards.","color":Color("#55f0ed")},
+    {"id":"slide","title":"Tile Slide","genre":"PUZZLE","desc":"Slide numbered tiles into order using the empty space.","color":Color("#a9b6ff")},
+    {"id":"fruit","title":"Fruit Catch","genre":"ARCADE","desc":"Catch falling fruit and dodge dangerous bombs.","color":Color("#ffb55f")}
 ]
 
 var current_tab := "home"
-var shop_category := "themes"
+var shop_category := "home"
 var profile_section := "overview"
 var content: VBoxContainer
 var lobby_scroll: ScrollContainer
@@ -60,6 +66,10 @@ var game_id := ""
 var game_root: Control
 var rng := RandomNumberGenerator.new()
 var sound_enabled := true
+var show_background_glow := true
+var compact_menus := false
+var show_header_tagline := true
+var settings_section := "home"
 var sound_player: AudioStreamPlayer
 var library_filter := "ALL"
 var favorite_games: Dictionary = {}
@@ -170,7 +180,7 @@ var challenge_streak := 0
 var challenge_streak_last_day := ""
 var challenge_streak_notice := ""
 
-const MISSION_GAMES := ["fast", "merge", "stack", "memory", "whack", "sort", "snake", "dots", "hopper", "rhythm"]
+const MISSION_GAMES := ["fast", "merge", "stack", "memory", "whack", "sort", "snake", "dots", "hopper", "rhythm", "dodge", "slide", "fruit"]
 
 # Login rewards are claimable once per local calendar day. A missed day
 # resets the consecutive streak; claiming again on the same day does not.
@@ -204,7 +214,10 @@ const TUTORIALS := {
     "snake": ["Swipe to steer your glowing snake around the grid.", "Collect stars to grow and score. Avoid walls and your own tail."],
     "dots": ["Drag a path between two dots of the same color.", "Connect every pair without crossing another path."],
     "hopper": ["Steer your character onto the floating platforms.", "Keep climbing and collecting stars. Watch where the next platform appears."],
-    "rhythm": ["Tap the lane when a note enters the glowing catch zone.", "Each successful hit plays part of the melody. Keep the rhythm to finish the song!"]
+    "rhythm": ["Tap the lane when a note enters the glowing catch zone.", "Each successful hit plays part of the melody. Keep the rhythm to finish the song!"],
+    "dodge": ["Drag your glowing orb left and right to avoid falling neon hazards.", "Survive for 35 seconds. Earn one point each second, and clear the level by reaching its goal."],
+    "slide": ["Tap a numbered tile next to the empty space to slide it.", "Put all numbers in order, with the empty space at the end. Fewer moves earn a higher score."],
+    "fruit": ["Drag your basket left and right to catch falling fruit.", "Avoid bombs! Collect fruit for points and survive the 40-second round."]
 }
 
 func _ready():
@@ -253,8 +266,10 @@ func _rewards_ready_count() -> int:
 
 func _rewards_hub() -> void:
     current_tab = "rewards"
+    _mission_reset_if_needed()
+    _weekly_reset_if_needed()
     _shell()
-    _heading("Rewards & Challenges", "Your daily rewards, achievements and events.")
+    _heading("Rewards Hub", "Everything you can earn, in one easy place.")
     if level_up_notice != "":
         _card("LEVEL-UP REWARD!", level_up_notice)
         level_up_notice = ""
@@ -262,21 +277,41 @@ func _rewards_hub() -> void:
     var weekly_ready: int = _weekly_rewards_ready()
     var total_ready: int = daily_ready + weekly_ready
     if total_ready > 0:
-        _card("REWARDS READY TO CLAIM", "%d reward%s waiting! Open Daily Missions or Weekly Challenges to collect them." % [total_ready, "" if total_ready == 1 else "s"])
+        _card("READY TO COLLECT", "%d reward%s available across daily and weekly challenges." % [total_ready, "" if total_ready == 1 else "s"])
     else:
-        _card("ALL CAUGHT UP", "Keep playing to complete missions and unlock more rewards.")
-    if challenge_streak_last_day != "":
-        _card("CHALLENGE STREAK", "%d completed day(s). Claim all three daily missions to keep it going!" % challenge_streak)
+        _card("ALL CAUGHT UP", "Play games to make progress toward your next rewards.")
+
+    # Four destinations; the detailed missions and login calendar live on
+    # their own screens instead of filling this dashboard.
+    _heading("Daily", "Quick rewards that reset with the calendar.")
+    var login_label: String = "DAILY LOGIN REWARD"
+    if _login_can_claim():
+        login_label += "  • READY"
+    content.add_child(_menu_button(login_label, _login_rewards_page, Color("#fbbf24"), "missions"))
+    var daily_label: String = "TODAY'S MISSIONS"
+    if daily_ready > (1 if _login_can_claim() else 0):
+        daily_label += "  • REWARDS READY"
+    content.add_child(_menu_button(daily_label, daily_missions, Color("#fbbf24"), "missions"))
+    if challenge_streak > 0:
+        _card("MISSION STREAK", "%d consecutive completed day(s). Claim all three missions each day to continue your streak." % challenge_streak)
+
+    _heading("More Ways to Earn", "Weekly goals, achievements and events.")
     var weekly_label: String = "WEEKLY CHALLENGES"
     if weekly_ready > 0:
-        weekly_label += "  (%d READY)" % weekly_ready
-    var daily_label: String = "DAILY MISSIONS & LOGIN REWARDS"
-    if daily_ready > 0:
-        daily_label += "  (%d READY)" % daily_ready
+        weekly_label += "  • %d READY" % weekly_ready
     content.add_child(_menu_button(weekly_label, weekly_challenges, Color("#34d399"), "missions"))
-    content.add_child(_menu_button(daily_label, daily_missions, Color("#fbbf24"), "missions"))
     content.add_child(_menu_button("ACHIEVEMENTS", achievements, Color("#344a9b"), "achievements"))
     content.add_child(_menu_button("CHALLENGES & EVENTS", events, Color("#344a9b"), "events"))
+
+
+func _login_rewards_page() -> void:
+    current_tab = "rewards"
+    _mission_reset_if_needed()
+    _shell()
+    _heading("Daily Login", "Visit every day to keep your login rewards coming.")
+    _login_calendar()
+    content.add_child(_menu_button("TODAY'S MISSIONS", daily_missions, Color("#fbbf24"), "missions"))
+    content.add_child(_menu_button("BACK TO REWARDS", _rewards_hub, PANEL2, "back"))
 
 
 func _bottom_navigation(root: VBoxContainer) -> void:
@@ -359,7 +394,8 @@ func _shell():
         glow.size = deco.size
         glow.color = deco.color
         glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-        add_child(glow)
+        if show_background_glow:
+            add_child(glow)
     # Keep the interface comfortably inset from the screen edges on phones.
     # This is a visual safety margin; browser safe-area behavior is also tested
     # separately on the actual iPhone.
@@ -391,7 +427,8 @@ func _shell():
     subtitle.text = "A UNIVERSE OF QUICK FUN"
     subtitle.add_theme_font_size_override("font_size", 15)
     subtitle.add_theme_color_override("font_color", MUTED)
-    brand.add_child(subtitle)
+    if show_header_tagline:
+        brand.add_child(subtitle)
     var wallet_group := HBoxContainer.new()
     wallet_group.alignment = BoxContainer.ALIGNMENT_END
     wallet_group.add_theme_constant_override("separation", 5)
@@ -408,6 +445,23 @@ func _shell():
     wallet.add_theme_color_override("font_color", Color("#fcd34d"))
     wallet_group.add_child(wallet)
     lobby_wallet_label = wallet
+    # Keep Settings one tap away on Home without adding another dashboard card.
+    if current_tab == "home":
+        var settings_button := Button.new()
+        settings_button.text = "⚙"
+        settings_button.tooltip_text = "Settings"
+        settings_button.custom_minimum_size = Vector2(48, 48)
+        settings_button.focus_mode = Control.FOCUS_NONE
+        settings_button.add_theme_font_size_override("font_size", 27)
+        settings_button.add_theme_color_override("font_color", Color("#ffffff"))
+        settings_button.add_theme_stylebox_override("normal", _lobby_button_style(Color("#344a76")))
+        settings_button.add_theme_stylebox_override("hover", _lobby_button_style(Color("#49679b")))
+        settings_button.add_theme_stylebox_override("pressed", _lobby_button_style(Color("#263b62")))
+        settings_button.pressed.connect(func():
+            _play_sound(SFX_TAP)
+            settings()
+        )
+        wallet_group.add_child(settings_button)
     var line := ColorRect.new()
     line.color = _theme_color().darkened(0.38)
     line.custom_minimum_size.y = 2
@@ -423,7 +477,7 @@ func _shell():
     root.add_child(scroll)
     content = VBoxContainer.new()
     content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    content.add_theme_constant_override("separation", 16)
+    content.add_theme_constant_override("separation", 8 if compact_menus else 16)
     content.add_theme_constant_override("margin_left", 20)
     content.add_theme_constant_override("margin_right", 20)
     content.add_theme_constant_override("margin_top", 20)
@@ -657,17 +711,36 @@ func _effect_purchase(effect_id: String) -> void:
         return
 
 
+func _open_shop_category(category: String) -> void:
+    shop_category = category
+    shop()
+
+
+func _open_profile_section(section: String) -> void:
+    profile_section = section
+    player_profile()
+
+
 func shop() -> void:
     current_tab = "shop"
     _shell()
-    _heading("Cosmetic Shop", "Customize themes, avatars and victory effects. No gameplay advantages.")
-    _card("YOUR WALLET", "%d coins available  •  Purchases save automatically." % coins)
+    _heading("Cosmetic Shop", "Find a look you love. Cosmetics never affect gameplay.")
+    _card("YOUR WALLET", "%d coins  •  Purchases save automatically." % coins)
     if shop_message != "":
         _card("SHOP UPDATE", shop_message)
-    _section_chips(["Themes", "Avatars", "Effects"], shop_category.capitalize(), func(value: String):
-        shop_category = value.to_lower()
-        shop()
-    )
+    if shop_category == "home":
+        _heading("Shop Categories", "Choose what you'd like to browse.")
+        _card("THEMES", "%d / %d owned  •  Change the colors of MiniVerse." % [owned_themes.size(), SHOP_THEMES.size()])
+        content.add_child(_button("BROWSE THEMES", func(): _open_shop_category("themes"), _theme_color(), 56))
+        _card("AVATARS", "%d / %d owned  •  Choose your player character." % [owned_avatars.size(), SHOP_AVATARS.size()])
+        content.add_child(_button("BROWSE AVATARS", func(): _open_shop_category("avatars"), _theme_color(), 56))
+        _card("VICTORY EFFECTS", "%d / %d owned  •  Customize your win celebrations." % [owned_effects.size(), SHOP_EFFECTS.size()])
+        content.add_child(_button("BROWSE EFFECTS", func(): _open_shop_category("effects"), _theme_color(), 56))
+        _card("AVATAR FRAMES & BADGES", "Find frames and earned badges in Profile → Customize.")
+        content.add_child(_button("OPEN PROFILE CUSTOMIZATION", func(): _open_profile_section("customize"), PANEL2, 56))
+        return
+    content.add_child(_button("BACK TO SHOP CATEGORIES", func(): _open_shop_category("home"), PANEL2, 52))
+    _heading(shop_category.capitalize(), "Browse, unlock, and equip.")
     if shop_category == "themes":
         for item in SHOP_THEMES:
             var id: String = str(item["id"])
@@ -1201,10 +1274,27 @@ func player_profile() -> void:
     profile_details.add_child(profile_wallet)
     var total_stars: int = _profile_total_stars()
     var unlocked_achievements: int = _profile_achievement_count()
-    _section_chips(["Overview", "Frames", "Collection", "Badges", "Titles", "Milestones", "Games"], profile_section.capitalize(), func(value: String):
-        profile_section = value.to_lower()
-        player_profile()
+    _section_chips(["Overview", "Customize", "Progress", "Games"], profile_section.capitalize() if profile_section in ["overview", "customize", "progress", "games"] else "Customize" if profile_section in ["frames", "collection", "badges", "titles"] else "Progress", func(value: String):
+        _open_profile_section(value.to_lower())
     )
+    if profile_section == "customize":
+        _heading("My Customization", "Choose a category to manage your collection.")
+        _card("AVATAR FRAMES", "%d / %d unlocked" % [owned_avatar_frames.size(), AVATAR_FRAMES.size()])
+        content.add_child(_button("MANAGE FRAMES", func(): _open_profile_section("frames"), _theme_color(), 54))
+        _card("PROFILE BADGES", "Earn and display badges through gameplay.")
+        content.add_child(_button("VIEW BADGES", func(): _open_profile_section("badges"), _theme_color(), 54))
+        _card("PLAYER TITLES", "Choose the title displayed on your profile.")
+        content.add_child(_button("MANAGE TITLES", func(): _open_profile_section("titles"), _theme_color(), 54))
+        _card("COSMETIC COLLECTION", "Track your cosmetics and claim collection rewards.")
+        content.add_child(_button("VIEW COLLECTION & REWARDS", func(): _open_profile_section("collection"), _theme_color(), 54))
+    if profile_section == "progress":
+        _heading("Player Progress", "Your ranks, milestones, and game collection.")
+        content.add_child(_button("VIEW PLAYER MILESTONES", func(): _open_profile_section("milestones"), _theme_color(), 56))
+        content.add_child(_button("VIEW GAME COLLECTION", func(): game_collection_page(), PANEL2, 56))
+    if profile_section in ["frames", "collection", "badges", "titles"]:
+        content.add_child(_button("BACK TO CUSTOMIZATION", func(): _open_profile_section("customize"), PANEL2, 52))
+    if profile_section == "milestones":
+        content.add_child(_button("BACK TO PLAYER PROGRESS", func(): _open_profile_section("progress"), PANEL2, 52))
     if profile_section == "overview":
             _profile_progress_panel()
             _card("OVERALL PERFORMANCE", "Rounds played: %d\nLevels cleared: %d\nWin rate: %s\nFavorite game: %s" % [total_games_played, total_wins, _stat_rate(total_wins, total_games_played), _profile_favorite()])
@@ -1314,115 +1404,99 @@ func player_profile() -> void:
 
 
 
+func _home_shortcut(label_text: String, action: Callable, accent: Color) -> Button:
+    var button := _button(label_text, action, accent, 58)
+    button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    button.add_theme_font_size_override("font_size", 19)
+    return button
+
+
+func _home_shortcut_row(left_label: String, left_action: Callable, right_label: String, right_action: Callable) -> void:
+    var actions := HBoxContainer.new()
+    actions.add_theme_constant_override("separation", 9)
+    content.add_child(actions)
+    actions.add_child(_home_shortcut(left_label, left_action, Color("#344a9b")))
+    actions.add_child(_home_shortcut(right_label, right_action, Color("#344a9b")))
+
+
+func favorite_games_page() -> void:
+    current_tab = "games"
+    _shell()
+    _heading("Favorite Games", "Your saved games in one place.")
+    content.add_child(_button("BROWSE ALL GAMES", library, _theme_color(), 54))
+    var count: int = 0
+    for game in GAMES:
+        if bool(favorite_games.get(str(game.id), false)):
+            content.add_child(_game_card(game))
+            count += 1
+    if count == 0:
+        _card("NO FAVORITES YET", "Open the Game Library and tap Add to Favorites on a game you love.")
+    content.add_child(_button("BACK TO HOME", home, Color("#344a9b"), 54))
+
+
 func home():
     Difficulty.clear_retry_level(game_id)
     current_tab = "home"
     _shell()
-    # Mobile-first welcome panel with custom procedural fantasy artwork.
+    # Phase 26: a short, actionable dashboard instead of a long stack of cards.
     var hero := PanelContainer.new()
     var hero_style := StyleBoxFlat.new()
     hero_style.bg_color = _theme_color().darkened(0.32)
     hero.add_theme_stylebox_override("panel", hero_style)
     content.add_child(hero)
     var hero_box := VBoxContainer.new()
-    hero_box.add_theme_constant_override("separation", 0)
+    hero_box.add_theme_constant_override("separation", 4)
     hero.add_child(hero_box)
     var art := HomeHero.new()
     art.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    art.custom_minimum_size.y = 95
     hero_box.add_child(art)
-    var welcome := VBoxContainer.new()
-    welcome.add_theme_constant_override("separation", 5)
-    welcome.add_theme_constant_override("margin_left", 12)
-    welcome.add_theme_constant_override("margin_right", 12)
-    welcome.add_theme_constant_override("margin_top", 12)
-    welcome.add_theme_constant_override("margin_bottom", 14)
-    hero_box.add_child(welcome)
-    var title := Label.new()
-    title.text = "SMALL GAMES. BIG FUN."
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size", 22)
-    title.add_theme_color_override("font_color", _theme_color().lightened(0.50))
-    welcome.add_child(title)
-    var subtitle := Label.new()
-    subtitle.text = "Pick a game, beat your best, earn rewards!"
-    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    subtitle.add_theme_color_override("font_color", Color("#e1e7ff"))
-    welcome.add_child(subtitle)
-    # At-a-glance player identity and progression on the home lobby.
-    var lobby_profile := PanelContainer.new()
-    lobby_profile.add_theme_stylebox_override("panel", _lobby_card_style(_theme_color()))
-    content.add_child(lobby_profile)
-    var lobby_stack := VBoxContainer.new()
-    lobby_stack.add_theme_constant_override("separation", 9)
-    lobby_profile.add_child(lobby_stack)
+    var tagline := Label.new()
+    tagline.text = "SMALL GAMES. BIG FUN."
+    tagline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    tagline.add_theme_font_size_override("font_size", 20)
+    tagline.add_theme_color_override("font_color", Color("#e4eaff"))
+    hero_box.add_child(tagline)
+    var identity := PanelContainer.new()
+    identity.add_theme_stylebox_override("panel", _lobby_card_style(_theme_color()))
+    content.add_child(identity)
     var identity_row := HBoxContainer.new()
     identity_row.add_theme_constant_override("separation", 12)
-    lobby_stack.add_child(identity_row)
-    identity_row.add_child(_framed_avatar(equipped_avatar, 66))
+    identity.add_child(identity_row)
+    identity_row.add_child(_framed_avatar(equipped_avatar, 62))
     var identity_text := VBoxContainer.new()
     identity_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    identity_text.add_theme_constant_override("separation", 3)
     identity_row.add_child(identity_text)
-    var lobby_title := Label.new()
-    lobby_title.text = _title_display_name(equipped_title).to_upper() if _title_unlocked(equipped_title) else _title_display_name("explorer").to_upper()
-    lobby_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    lobby_title.add_theme_font_size_override("font_size", 20)
-    lobby_title.add_theme_color_override("font_color", _menu_accent_text(_theme_color()))
-    identity_text.add_child(lobby_title)
+    var player_rank := Label.new()
+    player_rank.text = "%s  •  LEVEL %d" % [_player_rank_name(level).to_upper(), level]
+    player_rank.add_theme_font_size_override("font_size", 20)
+    player_rank.add_theme_color_override("font_color", Color("#ffe29e"))
+    identity_text.add_child(player_rank)
     identity_text.add_child(_badge_label())
-    var lobby_rank := Label.new()
-    lobby_rank.text = "%s  |  LEVEL %d" % [_player_rank_name(level).to_upper(), level]
-    lobby_rank.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    lobby_rank.add_theme_font_size_override("font_size", 18)
-    lobby_rank.add_theme_color_override("font_color", Color("#ffe29e"))
-    identity_text.add_child(lobby_rank)
-    var lobby_xp := Label.new()
-    lobby_xp.text = "%d / %d XP TO LEVEL %d" % [_level_xp_progress(), _xp_to_next_level(level), level + 1]
-    lobby_xp.add_theme_font_size_override("font_size", 18)
-    lobby_xp.add_theme_color_override("font_color", Color("#e4eaff"))
-    lobby_stack.add_child(lobby_xp)
-    var lobby_xp_bar := ProgressBar.new()
-    lobby_xp_bar.custom_minimum_size = Vector2(0, 22)
-    lobby_xp_bar.min_value = 0
-    lobby_xp_bar.max_value = _xp_to_next_level(level)
-    lobby_xp_bar.value = _level_xp_progress()
-    lobby_xp_bar.show_percentage = false
-    lobby_stack.add_child(lobby_xp_bar)
-    var next_rank := Label.new()
-    next_rank.text = _player_rank_progress()
-    next_rank.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    next_rank.add_theme_font_size_override("font_size", 17)
-    next_rank.add_theme_color_override("font_color", Color("#e4eaff"))
-    lobby_stack.add_child(next_rank)
-    lobby_stack.add_child(_button("VIEW MY PROFILE", player_profile, _theme_color(), 52))
+    var progress := ProgressBar.new()
+    progress.min_value = 0
+    progress.max_value = _xp_to_next_level(level)
+    progress.value = _level_xp_progress()
+    progress.custom_minimum_size.y = 14
+    progress.show_percentage = false
+    identity_text.add_child(progress)
     content.add_child(_menu_button("PLAY A RANDOM GAME", _random_game, Color("#36e58a"), "play", 60))
-    var quick_actions := HBoxContainer.new()
-    quick_actions.add_theme_constant_override("separation", 8)
-    content.add_child(quick_actions)
-    quick_actions.add_child(_menu_button("DAILY", _daily_challenge, Color("#fbbf24"), "daily", 54))
-    quick_actions.add_child(_menu_button("MISSIONS", daily_missions, Color("#344a9b"), "missions", 54))
     _card("TODAY'S FEATURED GAME", _daily_feature_description())
-    content.add_child(_button("VIEW DAILY GAME HISTORY", daily_game_history, Color("#344a9b"), 52))
-    var favorite_count: int = _favorite_game_count()
-    if favorite_count > 0:
-        _heading("Your Favorites", "%d saved game%s for quick access." % [favorite_count, "" if favorite_count == 1 else "s"])
-        for favorite_game in GAMES:
-            if bool(favorite_games.get(str(favorite_game.id), false)):
-                content.add_child(_game_card(favorite_game))
-    else:
-        _card("FAVORITE GAMES", "Save your favorite mini-games from the Game Library to find them here.")
-    _heading("Recently Played", "Your last three games, ready to jump back into.")
-    var shown := 0
+    content.add_child(_menu_button("PLAY DAILY CHALLENGE", _daily_challenge, Color("#fbbf24"), "daily", 58))
+    _heading("Quick Access", "Everything important, without the scrolling.")
+    _home_shortcut_row("FAVORITES (%d)" % _favorite_game_count(), favorite_games_page, "ALL GAMES (%d)" % GAMES.size(), library)
+    _home_shortcut_row("REWARDS", _rewards_hub, "MY PROFILE", player_profile)
+    _heading("Recently Played", "Your last three games.")
+    var shown: int = 0
     for recent_id in recent_games:
-        var recent_game := _game_data(recent_id)
+        var recent_game: Dictionary = _game_data(recent_id)
         if not recent_game.is_empty() and shown < 3:
             content.add_child(_game_card(recent_game))
             shown += 1
     if shown == 0:
-        _card("YOUR ADVENTURE STARTS HERE", "Play a game from the library and your three most recently played games will appear here.")
-    content.add_child(_menu_button("BROWSE ALL GAMES", library, Color("#344a9b"), "library", 54))
-    content.add_child(_menu_button("SETTINGS", settings, PANEL2, "settings", 48))
+        _card("READY TO PLAY?", "Choose a game from the library to begin. Your recent games will appear here.")
+    # Detailed daily history, achievements, settings and cosmetic pages
+    # remain available in their existing navigation destinations.
 
 func _toggle_game_favorite(id: String) -> void:
     if bool(favorite_games.get(id, false)):
@@ -1521,7 +1595,10 @@ const GAME_CATEGORIES := {
     "snake": "ARCADE",
     "dots": "STRATEGY",
     "hopper": "ARCADE",
-    "rhythm": "REFLEX"
+    "rhythm": "REFLEX",
+    "dodge": "REFLEX",
+    "slide": "PUZZLE",
+    "fruit": "ARCADE"
 }
 
 const CATEGORY_DESCRIPTIONS := {
@@ -1574,9 +1651,8 @@ func _claim_all_collection_milestones() -> void:
     coins += total_coins
     collection_reward_notice = "%d collection milestone(s) claimed! +%d coins." % [claimed_count, total_coins]
     _save()
-    # Refresh the library once, not once per reward. There are no other
-    # milestone claim buttons to return to after this action.
-    library()
+    # Refresh the collection page after a single Claim All action.
+    game_collection_page()
 
 
 func _collection_milestone_cards() -> void:
@@ -1604,14 +1680,26 @@ func _collection_milestone_cards() -> void:
         _card("COLLECTION REWARDS", "All available milestone rewards have been claimed. Discover more games to unlock the rest.")
 
 
+func game_collection_page() -> void:
+    current_tab = "games"
+    _shell()
+    _heading("Game Collection", "Discovery progress and one-time milestone rewards.")
+    var discovered: int = _discovered_game_count()
+    _card("DISCOVERED  %d / %d" % [discovered, GAMES.size()], "Finish a round in each new game to earn %d bonus coins. Games you played before this feature count toward discovery." % DISCOVERY_COIN_REWARD)
+    _collection_milestone_cards()
+    content.add_child(_button("BACK TO GAME LIBRARY", library, _theme_color(), 56))
+
+
 func library(restore_scroll: int = -1):
     current_tab = "games"
     _shell()
-    _heading("Game Library", "Find your next favorite across %d mini-games." % GAMES.size())
+    _heading("Game Library", "%d mini-games. Choose a category and jump into a game." % GAMES.size())
+
+    # Collection rewards now live on their own page, rather than pushing the
+    # game cards far below the fold.
     var discovered: int = _discovered_game_count()
-    _card("GAME DISCOVERY  %d / %d" % [discovered, GAMES.size()], "Finish your first round in a new mini-game to earn %d bonus coins. Previously played games count as discovered." % DISCOVERY_COIN_REWARD)
-    _collection_milestone_cards()
-    _card("BROWSE BY CATEGORY", "Choose a category to narrow the collection. Your favorites stay one tap away.")
+    content.add_child(_button("COLLECTION & REWARDS  (%d/%d DISCOVERED)" % [discovered, GAMES.size()], game_collection_page, _theme_color(), 58))
+    content.add_child(_button("MY FAVORITE GAMES", favorite_games_page, Color("#344a76"), 52))
 
     var filters := HFlowContainer.new()
     filters.add_theme_constant_override("h_separation", 8)
@@ -1624,9 +1712,9 @@ func library(restore_scroll: int = -1):
         var chip := _button(chip_label, func():
             library_filter = selected_category
             library()
-        , _theme_color() if library_filter == selected_category else Color("#344a76"), 54)
+        , _theme_color() if library_filter == selected_category else Color("#344a76"), 48)
         chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-        chip.add_theme_font_size_override("font_size", 19)
+        chip.add_theme_font_size_override("font_size", 18)
         filters.add_child(chip)
 
     var count: int = _category_game_count(library_filter)
@@ -1641,7 +1729,6 @@ func library(restore_scroll: int = -1):
             if _matches_filter(game, library_filter):
                 content.add_child(_game_card(game))
 
-    # Restore after layout calculates the new content height.
     if restore_scroll >= 0 and is_instance_valid(lobby_scroll):
         lobby_scroll.set_deferred("scroll_vertical", restore_scroll)
 
@@ -1735,19 +1822,66 @@ func achievements() -> void:
         badge_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "home"))
 
+func _settings_page(section: String) -> void:
+    settings_section = section
+    settings()
+
+
+func _settings_toggle(option: String) -> void:
+    match option:
+        "glow":
+            show_background_glow = not show_background_glow
+        "compact":
+            compact_menus = not compact_menus
+        "tagline":
+            show_header_tagline = not show_header_tagline
+    _save()
+    settings()
+
+
 func settings():
     _shell()
-    _heading("Settings", "Local starter build settings.")
-    _card("SAVE DATA", "Progress is stored on this device in Godot's user data folder.")
-    content.add_child(_button("SOUND EFFECTS: ON" if sound_enabled else "SOUND EFFECTS: OFF", _toggle_sound, Color("#344a9b")))
-    _card("TUTORIALS", "Each game's instructions appear the first time you play. You can review them any time.")
-    content.add_child(_button("REPLAY GAME TUTORIALS", _tutorial_menu, Color("#344a9b")))
-    _card("LEVEL TESTING", "Reset a single game's level to 1 without losing coins, XP, or progress in other games.")
-    content.add_child(_button("RESET MEMORY MATCH LEVEL", func(): _reset_game_level("memory"), Color("#344a9b")))
-    content.add_child(_button("CHOOSE ANOTHER GAME TO RESET", _reset_level_menu, Color("#344a9b")))
-    content.add_child(_button("RESET ALL GAME LEVELS", _confirm_reset_levels, Color("#f9738f")))
-    content.add_child(_button("RESET LOCAL PROGRESS", _confirm_reset_progress, Color("#f9738f")))
-    content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "back"))
+    _heading("Settings", "Personalize MiniVerse and manage your game.")
+    if settings_section == "home":
+        _card("APPEARANCE & LAYOUT", "Change the interface, visual effects, and your personal style.")
+        content.add_child(_button("APPEARANCE SETTINGS", func(): _settings_page("appearance"), _theme_color()))
+        _card("SOUND", "Adjust sound effects for your games and menus.")
+        content.add_child(_button("SOUND SETTINGS", func(): _settings_page("audio"), Color("#344a9b")))
+        _card("HELP & TUTORIALS", "Review the instructions for any mini-game.")
+        content.add_child(_button("GAME TUTORIALS", func(): _settings_page("help"), Color("#344a9b")))
+        _card("GAME DATA", "Reset individual levels or manage local saved progress.")
+        content.add_child(_button("SAVE & RESET OPTIONS", func(): _settings_page("data"), Color("#344a9b")))
+        content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "back"))
+        return
+
+    content.add_child(_button("BACK TO SETTINGS", func(): _settings_page("home"), PANEL2, 52))
+    if settings_section == "appearance":
+        _heading("Appearance", "Choose how MiniVerse looks and feels.")
+        _card("BACKGROUND GLOW", "Decorative corner lighting behind menus.")
+        content.add_child(_button("BACKGROUND GLOW: ON" if show_background_glow else "BACKGROUND GLOW: OFF", func(): _settings_toggle("glow"), _theme_color()))
+        _card("MENU SPACING", "Compact mode fits more items on screen with smaller gaps.")
+        content.add_child(_button("COMPACT MENUS: ON" if compact_menus else "COMPACT MENUS: OFF", func(): _settings_toggle("compact"), _theme_color()))
+        _card("HEADER TAGLINE", "Show or hide the MiniVerse slogan beneath the logo.")
+        content.add_child(_button("HEADER TAGLINE: ON" if show_header_tagline else "HEADER TAGLINE: OFF", func(): _settings_toggle("tagline"), _theme_color()))
+        _card("YOUR LOOK", "Themes, avatars and victory effects can be equipped in the Shop. Frames, titles and badges live in Profile.")
+        content.add_child(_button("OPEN COSMETIC SHOP", func(): _open_shop_category("home"), Color("#344a9b")))
+        content.add_child(_button("CUSTOMIZE PROFILE", func(): _open_profile_section("customize"), Color("#344a9b")))
+    elif settings_section == "audio":
+        _heading("Audio", "Choose whether game and menu sounds play.")
+        content.add_child(_button("SOUND EFFECTS: ON" if sound_enabled else "SOUND EFFECTS: OFF", _toggle_sound, _theme_color()))
+    elif settings_section == "help":
+        _heading("Help & Tutorials", "Review instructions whenever you want.")
+        content.add_child(_button("REPLAY GAME TUTORIALS", _tutorial_menu, Color("#344a9b")))
+    elif settings_section == "data":
+        _heading("Saved Data", "Progress is stored locally on this device.")
+        _card("RESET ONE GAME", "Start one game's levels again without losing coins or XP.")
+        content.add_child(_button("CHOOSE GAME TO RESET", _reset_level_menu, Color("#344a9b")))
+        _card("RESET ALL LEVELS", "Start game levels again. Other progress remains.")
+        content.add_child(_button("RESET ALL GAME LEVELS", _confirm_reset_levels, Color("#f9738f")))
+        _card("DANGER ZONE", "Erasing local progress cannot be undone.")
+        content.add_child(_button("ERASE LOCAL PROGRESS", _confirm_reset_progress, Color("#f9738f")))
+
+
 
 func _tutorial_menu() -> void:
     _shell()
@@ -1765,7 +1899,7 @@ func _replay_tutorial(id: String) -> void:
 func _toggle_sound() -> void:
     sound_enabled = not sound_enabled
     _save()
-    settings()
+    _settings_page("audio")
 
 func _reset_game_level(id: String) -> void:
     Difficulty.reset_game(id)
@@ -1860,6 +1994,9 @@ func launch(id: String):
         "dots": _play_dots()
         "hopper": _play_hopper()
         "rhythm": _play_rhythm()
+        "dodge": _play_dodge()
+        "slide": _play_slide()
+        "fruit": _play_fruit()
     if not bool(seen_tutorials.get(id, false)):
         _show_tutorial(id)
 
@@ -2307,6 +2444,24 @@ func _play_hopper():
     _mount_game(g)
     g.start_game()
 
+func _play_fruit():
+    var g := FruitCatch.new()
+    g.finished.connect(_finished)
+    _mount_game(g)
+    g.start_game()
+
+func _play_slide():
+    var g := TileSlide.new()
+    g.finished.connect(_finished)
+    _mount_game(g)
+    g.start_game()
+
+func _play_dodge():
+    var g := NeonDodge.new()
+    g.finished.connect(_finished)
+    _mount_game(g)
+    g.start_game()
+
 func _play_rhythm():
     var g := RhythmRush.new()
     g.sound_enabled = sound_enabled
@@ -2533,12 +2688,13 @@ func _mission_claim(key: String) -> void:
 
 func daily_missions() -> void:
     _mission_reset_if_needed()
+    current_tab = "rewards"
     _shell()
     _heading("Daily Missions", "Three fresh challenges each day. Complete them to claim extra rewards!")
     var daily_ready: int = _daily_rewards_ready()
     if daily_ready > 0:
         _card("REWARDS WAITING", "%d daily reward%s ready to claim, including today's login reward if available." % [daily_ready, "" if daily_ready == 1 else "s"])
-    _login_calendar()
+    content.add_child(_menu_button("VIEW DAILY LOGIN REWARDS", _login_rewards_page, Color("#fbbf24"), "missions"))
     _heading("Today's Missions", "Claim all three missions today to build your challenge streak.")
     var streak_display: int = challenge_streak
     var yesterday: String = Time.get_date_string_from_unix_time(Time.get_unix_time_from_datetime_string(mission_day + "T12:00:00") - 86400.0)
@@ -2642,11 +2798,13 @@ func _level_goal(id: String, played_level: int) -> int:
         "stack": [2, 3, 4, 5, 6],
         "whack": [35, 50, 65, 85, 105],
         "merge": [16, 32, 48, 72, 96],
-        "rhythm": [350, 650, 950, 1300, 1650]
+        "rhythm": [350, 650, 950, 1300, 1650],
+        "dodge": [12, 16, 20, 25, 30],
+        "fruit": [50, 80, 110, 140, 170]
     }
     if first_five.has(id) and played_level <= 5:
         return int(first_five[id][played_level - 1])
-    var base_goals := {"fast": 135, "merge": 24, "stack": 6, "whack": 105, "snake": 3, "hopper": 3, "rhythm": 1650}
+    var base_goals := {"fast": 135, "merge": 24, "stack": 6, "whack": 105, "snake": 3, "hopper": 3, "rhythm": 1650, "dodge": 30}
     var base: int = int(base_goals.get(id, 1))
     var step: int = maxi(0, played_level - (5 if first_five.has(id) else 1))
     return maxi(1, int(round(float(base) * (1.0 + 0.10 * float(step)))))
@@ -2655,7 +2813,7 @@ func _finished(id: String, score: int, extra: Dictionary = {}):
     var previous_best: int = int(best_scores.get(id, 0))
     var played_level: int = Difficulty.level(id)
     var goal: int = _level_goal(id, played_level)
-    var puzzle_completion: bool = id in ["memory", "sort", "dots"]
+    var puzzle_completion: bool = id in ["memory", "sort", "dots", "slide"]
     var passed: bool = puzzle_completion or score >= goal
     var stars_earned: int = 1
     if passed:
@@ -2833,7 +2991,8 @@ func _result_tip(id: String, passed: bool, stars_earned: int) -> String:
         "merge": "Tip: Build bigger merges to reach the score target.",
         "snake": "Tip: Plan your turns before you reach the wall.",
         "hopper": "Tip: Aim for the center of each platform.",
-        "rhythm": "Tip: Tap when notes enter the glowing catch zone."
+        "rhythm": "Tip: Tap when notes enter the glowing catch zone.",
+        "dodge": "Tip: Keep moving to avoid falling hazards."
     }
     return str(hints.get(id, "Try again — every attempt helps you improve."))
 
@@ -2908,7 +3067,7 @@ func _save():
     _grant_milestone_cosmetics()
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"xp_curve_version":2,"last_rewarded_level":last_rewarded_level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"favorite_games":favorite_games,"discovery_rewards_claimed":discovery_rewards_claimed,"collection_milestones_claimed":collection_milestones_claimed,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_avatar_frames":owned_avatar_frames,"equipped_avatar_frame":equipped_avatar_frame,"equipped_profile_badge":equipped_profile_badge,"cosmetic_rewards_claimed":cosmetic_rewards_claimed,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day,"daily_feature_reward_day":daily_feature_reward_day,"daily_feature_history":daily_feature_history}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"xp_curve_version":2,"last_rewarded_level":last_rewarded_level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"favorite_games":favorite_games,"discovery_rewards_claimed":discovery_rewards_claimed,"collection_milestones_claimed":collection_milestones_claimed,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"show_background_glow":show_background_glow,"compact_menus":compact_menus,"show_header_tagline":show_header_tagline,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_avatar_frames":owned_avatar_frames,"equipped_avatar_frame":equipped_avatar_frame,"equipped_profile_badge":equipped_profile_badge,"cosmetic_rewards_claimed":cosmetic_rewards_claimed,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day,"daily_feature_reward_day":daily_feature_reward_day,"daily_feature_history":daily_feature_history}))
         f.close()
 
 func _load_save():
@@ -2938,6 +3097,9 @@ func _load_save():
         mission_claimed = data.get("mission_claimed", {})
         _mission_reset_if_needed()
         sound_enabled = bool(data.get("sound_enabled", true))
+        show_background_glow = bool(data.get("show_background_glow", true))
+        compact_menus = bool(data.get("compact_menus", false))
+        show_header_tagline = bool(data.get("show_header_tagline", true))
         coins = int(data.get("coins",0))
         xp = int(data.get("xp",0))
         level = int(data.get("level",1))

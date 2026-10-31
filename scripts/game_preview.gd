@@ -21,6 +21,12 @@ func _draw() -> void:
         var gy: float = h * (0.18 + 0.22 * float(i))
         draw_line(Vector2(0, gy), Vector2(w, gy), Color(accent.r, accent.g, accent.b, 0.10), 1.0)
     var center := Vector2(w * 0.5, h * 0.5)
+    if game_id == "dodge":
+        draw_circle(center, minf(w, h) * 0.17, Color("#55f0ed"))
+        draw_arc(center, minf(w, h) * 0.24, 0.0, TAU, 32, Color("#d5ffff"), 2.0)
+        for pos in [Vector2(0.23,0.22), Vector2(0.76,0.35), Vector2(0.27,0.76), Vector2(0.72,0.79)]:
+            draw_rect(Rect2(Vector2(w*pos.x-7.0,h*pos.y-7.0), Vector2(14,14)), Color("#ff668f"), true)
+        return
     if game_id == "fast":
         draw_circle(center, minf(w, h) * 0.36, Color(accent.r, accent.g, accent.b, 0.10))
         draw_arc(center, minf(w, h) * 0.34, 0.0, TAU, 48, accent, 3.0, true)
