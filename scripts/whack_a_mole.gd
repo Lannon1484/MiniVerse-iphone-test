@@ -4,7 +4,7 @@ class_name WhackAMole
 signal finished(game_id: String, score: int, extra: Dictionary)
 signal gameplay_sound(kind: String)
 
-const ROUND_SECONDS := 45.0
+const ROUND_SECONDS := 20.0
 const Difficulty = preload("res://scripts/difficulty.gd")
 var difficulty_level: int = 1
 const MOLE_IMAGE := preload("res://assets/whack/mole.png")
@@ -29,6 +29,11 @@ var playing := false
 var time_label: Label
 var score_label: Label
 var message_label: Label
+var level_label: Label
+var next_button: Button
+var claim_button: Button
+var round_completed := false
+var round_score := 0
 
 func start_game() -> void:
     rng.randomize()
@@ -54,8 +59,10 @@ func _build() -> void:
     root.add_child(instruction)
     var stats := HBoxContainer.new()
     root.add_child(stats)
-    time_label = _label("TIME 45", 19)
+    time_label = _label("TIME 20", 19)
     score_label = _label("SCORE 0", 19)
+    level_label = _label("LEVEL 1", 19)
+    stats.add_child(level_label)
     stats.add_child(time_label)
     stats.add_child(score_label)
     var grid := GridContainer.new()
@@ -87,6 +94,18 @@ func _build() -> void:
     restart.add_theme_font_size_override("font_size", 18)
     restart.pressed.connect(_restart)
     root.add_child(restart)
+    next_button = Button.new()
+    next_button.text = "NEXT LEVEL"
+    next_button.custom_minimum_size.y = 62
+    next_button.visible = false
+    next_button.pressed.connect(_next_level)
+    root.add_child(next_button)
+    claim_button = Button.new()
+    claim_button.text = "CLAIM REWARD & FINISH"
+    claim_button.custom_minimum_size.y = 58
+    claim_button.visible = false
+    claim_button.pressed.connect(_claim_reward)
+    root.add_child(claim_button)
 
 func _label(value: String, font_size: int) -> Label:
     var l := Label.new()
@@ -105,7 +124,26 @@ func _style(color: Color) -> StyleBoxFlat:
     s.border_color = Color("#7684c4")
     return s
 
+func _next_level() -> void:
+    if not round_completed:
+        return
+    Difficulty.complete("whack")
+    _restart()
+
+func _claim_reward() -> void:
+    if not round_completed:
+        return
+    round_completed = false
+    next_button.visible = false
+    claim_button.visible = false
+    finished.emit("whack", round_score, {"hits": hits, "misses": misses})
+
 func _restart() -> void:
+    round_completed = false
+    if is_instance_valid(next_button):
+        next_button.visible = false
+    if is_instance_valid(claim_button):
+        claim_button.visible = false
     difficulty_level = Difficulty.level("whack")
     playing = true
     seconds_left = ROUND_SECONDS
@@ -117,7 +155,7 @@ func _restart() -> void:
     hits = 0
     misses = 0
     _clear_target()
-    message_label.text = "Whack moles, avoid snakes!"
+    message_label.text = "Level %d: Whack moles, avoid snakes!" % difficulty_level
     _update_labels()
     set_process(true)
 
@@ -130,9 +168,12 @@ func _process(delta: float) -> void:
         playing = false
         _clear_target()
         _update_labels()
-        message_label.text = "Round complete!"
+        round_completed = true
+        round_score = score
+        message_label.text = "Level %d complete! Next level or claim rewards." % difficulty_level
+        next_button.visible = true
+        claim_button.visible = true
         set_process(false)
-        finished.emit("whack", score, {"hits": hits, "misses": misses})
         return
     if active_slot >= 0:
         visible_for -= delta
@@ -193,5 +234,6 @@ func _clear_target() -> void:
         b.add_theme_stylebox_override("hover", _style(BASE.lightened(0.1)))
 
 func _update_labels() -> void:
+    level_label.text = "LEVEL %d" % difficulty_level
     time_label.text = "TIME %d" % ceili(seconds_left)
     score_label.text = "SCORE %d" % score

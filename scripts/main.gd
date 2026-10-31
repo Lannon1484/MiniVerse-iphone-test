@@ -48,6 +48,7 @@ var coins := 0
 var xp := 0
 var level := 1
 var best_scores: Dictionary = {}
+var best_stars: Dictionary = {}
 var recent_games: Array[String] = []
 var game_id := ""
 var game_root: Control
@@ -329,6 +330,11 @@ func _game_card(g: Dictionary) -> PanelContainer:
     genre.add_theme_font_size_override("font_size", 10)
     genre.add_theme_color_override("font_color", g.color)
     detail.add_child(genre)
+    var progress := Label.new()
+    progress.text = "LEVEL %d   •   BEST %s" % [Difficulty.level(str(g.id)), "★".repeat(int(best_stars.get(str(g.id), 0))) + "☆".repeat(3 - int(best_stars.get(str(g.id), 0)))]
+    progress.add_theme_font_size_override("font_size", 11)
+    progress.add_theme_color_override("font_color", Color("#ffe29e"))
+    detail.add_child(progress)
     var desc := Label.new()
     desc.text = g.desc
     desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -451,6 +457,13 @@ func _mount_game(g: Control):
     _shell()
     lobby_touch_scrolling = false
     game_root = g
+    # Shared progress header across all ten games.
+    var progress_header := Label.new()
+    progress_header.text = "%s  •  LEVEL %d" % [_game_name(game_id).to_upper(), Difficulty.level(game_id)]
+    progress_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    progress_header.add_theme_font_size_override("font_size", 17)
+    progress_header.add_theme_color_override("font_color", Color("#ffe29e"))
+    content.add_child(progress_header)
     # Keep a visible way back to the lobby while playing any mini-game.
     content.add_child(_button("←  RETURN TO LOBBY", home, PANEL2, 46))
     # ScrollContainer content must have a real minimum height; otherwise nested
@@ -541,8 +554,19 @@ func _daily_challenge():
     launch(challenge_ids[day_key % challenge_ids.size()])
 
 func _finished(id: String, score: int, extra: Dictionary = {}):
+    var previous_best: int = int(best_scores.get(id, 0))
+    var played_level: int = Difficulty.level(id)
+    # Some games handle their own Next Level progression; keep existing behavior.
     Difficulty.complete(id)
-    var record := score > int(best_scores.get(id, 0))
+    var record := score > previous_best
+    # Stars measure the current run against the player's own previous best.
+    # First attempts earn a baseline rating; better runs can reach three stars.
+    var stars_earned: int = 1
+    if score > 0:
+        stars_earned = 2 if previous_best == 0 or score >= int(previous_best * 0.65) else 1
+        if previous_best > 0 and score >= int(previous_best * 1.1):
+            stars_earned = 3
+    best_stars[id] = maxi(int(best_stars.get(id, 0)), stars_earned)
     if record:
         best_scores[id] = score
     # Capped rewards keep different games from inflating the economy.
@@ -553,9 +577,9 @@ func _finished(id: String, score: int, extra: Dictionary = {}):
     level = int(xp / 100) + 1
     _save()
     _play_sound(SFX_WIN)
-    _results(id, score, reward, record, earned_xp)
+    _results(id, score, reward, record, earned_xp, stars_earned, played_level)
 
-func _results(id: String, score: int, reward: int, record: bool, earned_xp: int):
+func _results(id: String, score: int, reward: int, record: bool, earned_xp: int, stars_earned: int, played_level: int):
     _shell()
     _heading("Round Complete", "Every attempt makes you better.")
     var celebration := PanelContainer.new()
@@ -565,7 +589,7 @@ func _results(id: String, score: int, reward: int, record: bool, earned_xp: int)
     column.add_theme_constant_override("separation", 9)
     celebration.add_child(column)
     var stars := Label.new()
-    stars.text = "★ ★ ★" if record else "★ ★ ☆"
+    stars.text = "★ ".repeat(stars_earned) + "☆ ".repeat(3 - stars_earned)
     stars.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     stars.add_theme_font_size_override("font_size", 39)
     stars.add_theme_color_override("font_color", Color("#ffdb78"))
@@ -593,7 +617,8 @@ func _results(id: String, score: int, reward: int, record: bool, earned_xp: int)
     confetti.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     confetti.mouse_filter = Control.MOUSE_FILTER_IGNORE
     add_child(confetti)
-    content.add_child(_button("↻  PLAY AGAIN", func(): launch(id), ACCENT))
+    content.add_child(_button("NEXT LEVEL  →", func(): launch(id), ACCENT))
+
     content.add_child(_button("⌂  BACK TO MINIVERSE", home, PANEL2))
 
 func _game_data(id: String) -> Dictionary:
@@ -611,7 +636,7 @@ func _game_name(id: String) -> String:
 func _save():
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"recent_games":recent_games,"sound_enabled":sound_enabled}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"sound_enabled":sound_enabled}))
         f.close()
 
 func _load_save():
@@ -626,6 +651,7 @@ func _load_save():
         xp = int(data.get("xp",0))
         level = int(data.get("level",1))
         best_scores = data.get("best_scores",{})
+        best_stars = data.get("best_stars",{})
         recent_games.clear()
         for saved_id in data.get("recent_games", []):
             if _game_data(str(saved_id)).size() > 0 and recent_games.size() < 3:
