@@ -171,13 +171,13 @@ func _bottom_navigation(root: VBoxContainer) -> void:
     separator.custom_minimum_size.y = 2
     root.add_child(separator)
     var bar := HBoxContainer.new()
-    bar.custom_minimum_size.y = 90
+    bar.custom_minimum_size.y = 100
     bar.add_theme_constant_override("separation", 3)
     root.add_child(bar)
     for item in [
         {"id":"home", "label":"Home", "icon":"home"},
         {"id":"games", "label":"Games", "icon":"library"},
-        {"id":"rewards", "label":"Rewards", "icon":"achievements"},
+        {"id":"rewards", "label":"Earn", "icon":"achievements"},
         {"id":"shop", "label":"Shop", "icon":"shop"},
         {"id":"profile", "label":"Profile", "icon":"profile"}
     ]:
@@ -189,8 +189,8 @@ func _bottom_navigation(root: VBoxContainer) -> void:
         button.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
         button.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
         button.expand_icon = true
-        button.add_theme_constant_override("icon_max_width", 28)
-        button.add_theme_font_size_override("font_size", 17)
+        button.add_theme_constant_override("icon_max_width", 30)
+        button.add_theme_font_size_override("font_size", 20)
         button.add_theme_color_override("font_color", Color("#ffffff") if selected else Color("#e4e9ff"))
         button.add_theme_color_override("font_hover_color", Color("#ffffff"))
         button.add_theme_color_override("font_pressed_color", Color("#ffffff"))
@@ -198,7 +198,7 @@ func _bottom_navigation(root: VBoxContainer) -> void:
         button.add_theme_stylebox_override("hover", _style(_theme_color().darkened(0.18), 10))
         button.add_theme_stylebox_override("pressed", _style(_theme_color().darkened(0.42), 10))
         button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-        button.custom_minimum_size.y = 84
+        button.custom_minimum_size.y = 94
         button.pressed.connect(func():
             _play_sound(SFX_TAP)
             match tab_id:
@@ -217,9 +217,9 @@ func _section_chips(options: Array[String], selected: String, callback: Callable
     chips.add_theme_constant_override("v_separation", 6)
     content.add_child(chips)
     for option in options:
-        var chip := _button(option, func(): callback.call(option), _theme_color() if option == selected else PANEL2, 52)
+        var chip := _button(option, func(): callback.call(option), _theme_color() if option == selected else PANEL2, 58)
         chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-        chip.add_theme_font_size_override("font_size", 17)
+        chip.add_theme_font_size_override("font_size", 21)
         chips.add_child(chip)
 
 
@@ -270,7 +270,7 @@ func _shell():
     brand.add_child(logo)
     var subtitle := Label.new()
     subtitle.text = "A UNIVERSE OF QUICK FUN"
-    subtitle.add_theme_font_size_override("font_size", 10)
+    subtitle.add_theme_font_size_override("font_size", 15)
     subtitle.add_theme_color_override("font_color", MUTED)
     brand.add_child(subtitle)
     var wallet_group := HBoxContainer.new()
@@ -355,9 +355,9 @@ func _button(text: String, cb: Callable, color := ACCENT, height := 56) -> Butto
     # Taps still activate the button normally.
     b.mouse_filter = Control.MOUSE_FILTER_PASS
     # Keep every interactive button comfortably tappable on phones.
-    b.custom_minimum_size.y = maxi(height, 52)
+    b.custom_minimum_size.y = maxi(height, 62)
     b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    b.add_theme_font_size_override("font_size", 17)
+    b.add_theme_font_size_override("font_size", 21)
     var button_color: Color = _theme_button_color(color)
     b.add_theme_color_override("font_color", Color("#17172b") if color == ACCENT or color == Color("#fbbf24") else TEXT)
     b.add_theme_stylebox_override("normal", _lobby_button_style(button_color))
@@ -377,7 +377,7 @@ func _menu_button(label: String, cb: Callable, color: Color, icon_name: String, 
     button.icon = load("res://assets/ui/menu_%s.png" % icon_name)
     button.icon_alignment = HORIZONTAL_ALIGNMENT_LEFT
     button.expand_icon = true
-    button.add_theme_constant_override("icon_max_width", 30)
+    button.add_theme_constant_override("icon_max_width", 34)
     return button
 
 func _play_sound(stream: AudioStream) -> void:
@@ -572,13 +572,14 @@ func _heading(title: String, subtitle := ""):
     content.add_child(box)
     var t := Label.new()
     t.text = title
-    t.add_theme_font_size_override("font_size", 27)
+    t.add_theme_font_size_override("font_size", 30)
     t.add_theme_color_override("font_color", _theme_color())
     box.add_child(t)
     if subtitle != "":
         var s := Label.new()
         s.text = subtitle
         s.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        s.add_theme_font_size_override("font_size", 19)
         s.add_theme_color_override("font_color", MUTED)
         box.add_child(s)
 
@@ -591,12 +592,13 @@ func _card(title: String, body: String) -> PanelContainer:
     p.add_child(v)
     var t := Label.new()
     t.text = title
-    t.add_theme_font_size_override("font_size", 18)
+    t.add_theme_font_size_override("font_size", 22)
     t.add_theme_color_override("font_color", TEXT)
     v.add_child(t)
     var d := Label.new()
     d.text = body
     d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    d.add_theme_font_size_override("font_size", 19)
     d.add_theme_color_override("font_color", MUTED)
     v.add_child(d)
     return p
