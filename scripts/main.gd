@@ -102,6 +102,9 @@ func _shell():
     var scroll := ScrollContainer.new()
     scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
     scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+    scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+    # Small drag threshold makes finger swipes start scrolling promptly.
+    scroll.scroll_deadzone = 6
     root.add_child(scroll)
     content = VBoxContainer.new()
     content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -152,6 +155,9 @@ func _lobby_card_style(accent: Color) -> StyleBoxFlat:
 func _button(text: String, cb: Callable, color := ACCENT, height := 56) -> Button:
     var b := Button.new()
     b.text = text
+    # Let touch drags on a button reach the surrounding ScrollContainer.
+    # Taps still activate the button normally.
+    b.mouse_filter = Control.MOUSE_FILTER_PASS
     # Keep every interactive button comfortably tappable on phones.
     b.custom_minimum_size.y = maxi(height, 52)
     b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
