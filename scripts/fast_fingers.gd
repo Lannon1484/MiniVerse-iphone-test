@@ -1,6 +1,7 @@
 extends Control
 class_name FastFingers
 const ArcadeField = preload("res://scripts/arcade_field.gd")
+const TARGET_PICTURE = preload("res://assets/classic_games/fast_target.png")
 signal finished(game_id: String, score: int, extra: Dictionary)
 var time_left := 20.0
 var score := 0
@@ -74,16 +75,19 @@ func _process(delta):
 func _spawn():
     if is_instance_valid(target): target.queue_free()
     target = Button.new()
-    target.text = "✦"
-    target.custom_minimum_size = Vector2(78,78)
+    target.text = ""
+    target.icon = TARGET_PICTURE
+    target.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    target.expand_icon = true
+    target.custom_minimum_size = Vector2(92,92)
     target.add_theme_font_size_override("font_size",32)
     target.add_theme_color_override("font_color", Color("#17172b"))
     target.add_theme_stylebox_override("hover", _round(Color("#ffffff")))
     target.add_theme_stylebox_override("pressed", _round(Color("#e0e7ff")))
-    target.add_theme_stylebox_override("normal",_round([Color("#f9738f"),Color("#fbbf24"),Color("#60a5fa"),Color("#86efac")][rng.randi_range(0,3)]))
+    target.add_theme_stylebox_override("normal",_round(Color("#33376b")))
     area.add_child(target)
-    target.position = Vector2(rng.randf_range(0,maxf(0,area.size.x-78)),rng.randf_range(0,maxf(0,area.size.y-78)))
-    target.pivot_offset = Vector2(39, 39)
+    target.position = Vector2(rng.randf_range(0,maxf(0,area.size.x-92)),rng.randf_range(0,maxf(0,area.size.y-92)))
+    target.pivot_offset = Vector2(46, 46)
     target.scale = Vector2(0.55, 0.55)
     var appear := create_tween()
     appear.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)

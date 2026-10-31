@@ -55,3 +55,6 @@ This is a playable starter build, not a production-ready commercial release. It 
 - 125px high cards and large 54px characters in a 4x4 grid.
 - High-contrast A-H pairs with unique bright card colors to avoid missing emoji font glyphs on mobile Web.
 - Clear matched-card green state, larger scores, and larger restart button.
+
+
+Visual update: illustrated Fast Fingers target and candy-sky field; glossy rounded Number Merge tiles; floating-island Perfect Stack scenery and toy-like block highlights. Gameplay logic preserved.

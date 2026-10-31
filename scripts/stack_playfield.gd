@@ -26,16 +26,20 @@ func _draw() -> void:
     var h: float = size.y
     if w <= 1.0 or h <= 1.0:
         return
-    draw_rect(Rect2(Vector2.ZERO, size), Color("#0c1228"), true)
-    # Soft horizon glow and a subtle technical grid make the playfield feel arcade-like.
-    draw_rect(Rect2(Vector2(0, h * 0.72), Vector2(w, h * 0.28)), Color("#18254a", 0.42), true)
-    for i in range(9):
-        var y: float = float(i) * h / 8.0
-        draw_line(Vector2(0, y), Vector2(w, y), Color("#344064", 0.42), 1.0)
-    for i in range(11):
-        var x: float = float(i) * w / 10.0
-        draw_line(Vector2(x, 0), Vector2(x, h), Color("#283456", 0.28), 1.0)
-    draw_line(Vector2(w * 0.5, 0), Vector2(w * 0.5, h), Color("#67e8f9", 0.2), 1.0)
+    # Whimsical illustrated sky and floating islands.
+    draw_rect(Rect2(Vector2.ZERO, size), Color("#6c9be8"), true)
+    draw_rect(Rect2(Vector2(0, h * 0.59), Vector2(w, h * 0.41)), Color("#b4a0f3"), true)
+    draw_circle(Vector2(w * 0.78, h * 0.16), 35.0, Color("#ffe5a3"))
+    for i in range(6):
+        var cx: float = fposmod(28.0 + float(i) * 143.0, w)
+        var cy: float = h * (0.17 + float(i % 3) * 0.21)
+        draw_circle(Vector2(cx, cy), 17.0, Color("#ffffff", 0.65))
+        draw_circle(Vector2(cx + 18.0, cy + 5.0), 14.0, Color("#ffffff", 0.65))
+    for i in range(3):
+        var ix: float = fposmod(34.0 + float(i) * 197.0, w)
+        var iy: float = h * (0.70 + float(i % 2) * 0.13)
+        draw_colored_polygon(PackedVector2Array([Vector2(ix - 55, iy), Vector2(ix + 55, iy), Vector2(ix + 22, iy + 35), Vector2(ix - 15, iy + 35)]), Color("#655a9c", 0.75))
+        draw_rect(Rect2(Vector2(ix - 55, iy - 9), Vector2(110, 13)), Color("#91e6ad", 0.9), true)
     for i in range(tower.size()):
         var r: Rect2 = tower[i]
         var x: float = (w - r.size.x) / 2.0 if i == 0 else r.position.x
@@ -43,6 +47,7 @@ func _draw() -> void:
         var drawn := Rect2(Vector2(x, y), Vector2(r.size.x, block_height))
         draw_rect(drawn.grow(3.0), Color(colors[i % colors.size()].r, colors[i % colors.size()].g, colors[i % colors.size()].b, 0.12), true)
         draw_rect(drawn, colors[i % colors.size()], true)
+        draw_rect(Rect2(drawn.position + Vector2(3, 5), Vector2(maxf(0.0, drawn.size.x - 6.0), 6)), Color("#ffffff", 0.4), true)
         draw_rect(Rect2(drawn.position, Vector2(drawn.size.x, 4.0)), Color("#ffffff", 0.58), true)
         draw_rect(drawn, Color("#ffffff", 0.82), false, 2.0)
     if running and not tower.is_empty():
@@ -50,6 +55,7 @@ func _draw() -> void:
         var moving := Rect2(Vector2(moving_x, y), Vector2(moving_width, block_height))
         draw_rect(moving.grow(5.0), Color("#67e8f9", 0.13), true)
         draw_rect(moving, colors[tower.size() % colors.size()], true)
+        draw_rect(Rect2(moving.position + Vector2(3, 5), Vector2(maxf(0.0, moving.size.x - 6.0), 6)), Color("#ffffff", 0.45), true)
         draw_rect(Rect2(moving.position, Vector2(moving.size.x, 4.0)), Color("#ffffff", 0.72), true)
         draw_rect(moving, Color("#ffffff", 0.95), false, 2.0)
     if impact_time > 0.0:

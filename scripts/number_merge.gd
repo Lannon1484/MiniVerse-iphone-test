@@ -42,7 +42,7 @@ func _new_board():
     root.add_theme_constant_override("separation",10)
     add_child(root)
     var title := Label.new()
-    title.text="NUMBER MERGE"; title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; title.add_theme_font_size_override("font_size",25); title.add_theme_color_override("font_color",Color("#93c5fd"))
+    title.text="NUMBER MERGE"; title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; title.add_theme_font_size_override("font_size",25); title.add_theme_color_override("font_color",Color("#8ce9d8"))
     root.add_child(title)
     var desc := Label.new()
     desc.text="Tap a tile, then an adjacent matching tile to merge."
@@ -55,7 +55,7 @@ func _new_board():
     stats.add_child(score_label); stats.add_child(moves_label)
     var board_panel := PanelContainer.new()
     board_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    board_panel.add_theme_stylebox_override("panel", _tile_style(Color("#1a2040")))
+    board_panel.add_theme_stylebox_override("panel", _tile_style(Color("#51468f")))
     root.add_child(board_panel)
     grid=GridContainer.new(); grid.columns=N; grid.size_flags_vertical=Control.SIZE_EXPAND_FILL; grid.size_flags_horizontal=Control.SIZE_EXPAND_FILL
     grid.add_theme_constant_override("h_separation",8); grid.add_theme_constant_override("v_separation",8); board_panel.add_child(grid)
@@ -84,7 +84,7 @@ func _refresh():
             var v: int=board[y][x]
             var b:=Button.new(); b.text="" if v==0 else str(v); b.custom_minimum_size=Vector2(50,70)
             b.size_flags_horizontal=Control.SIZE_EXPAND_FILL; b.size_flags_vertical=Control.SIZE_EXPAND_FILL
-            b.add_theme_font_size_override("font_size",22)
+            b.add_theme_font_size_override("font_size",30)
             b.add_theme_color_override("font_color",Color("#17172b"))
             var tile_color := _tile_color(v)
             if selected == Vector2i(x,y): tile_color = Color("#fbbf24")
@@ -102,10 +102,10 @@ func _refresh():
 func _tile_color(v: int) -> Color:
     match v:
         0: return Color("#292e4c")
-        2: return Color("#dbeafe")
-        4: return Color("#bfdbfe")
-        8: return Color("#93c5fd")
-        16: return Color("#60a5fa")
+        2: return Color("#ffe2b8")
+        4: return Color("#ffd08c")
+        8: return Color("#8ce9d8")
+        16: return Color("#72d7f4")
         32: return Color("#a5b4fc")
         64: return Color("#c4b5fd")
         128: return Color("#f0abfc")
@@ -115,9 +115,10 @@ func _tile_color(v: int) -> Color:
         _: return Color("#fcd34d")
 
 func _tile_style(c: Color) -> StyleBoxFlat:
-    var s:=StyleBoxFlat.new(); s.bg_color=c; s.corner_radius_top_left=12; s.corner_radius_top_right=12; s.corner_radius_bottom_left=12; s.corner_radius_bottom_right=12
+    var s:=StyleBoxFlat.new(); s.bg_color=c; s.corner_radius_top_left=20; s.corner_radius_top_right=20; s.corner_radius_bottom_left=20; s.corner_radius_bottom_right=20
     s.content_margin_left=5; s.content_margin_right=5; s.content_margin_top=5; s.content_margin_bottom=5
-    s.border_width_left=1; s.border_width_right=1; s.border_width_top=1; s.border_width_bottom=1; s.border_color=Color("#ffffff",0.18)
+    s.border_width_left=3; s.border_width_right=3; s.border_width_top=3; s.border_width_bottom=3; s.border_color=Color("#ffffff",0.72)
+    s.shadow_color=Color("#10162e",0.5); s.shadow_size=5; s.shadow_offset=Vector2(0,4)
     return s
 
 func _press(x: int,y: int):

@@ -7,17 +7,17 @@ func _draw() -> void:
     var h := size.y
     if w <= 1.0 or h <= 1.0:
         return
-    draw_rect(Rect2(Vector2.ZERO, size), Color("#10152d"), true)
-    var grid_color := Color(accent.r, accent.g, accent.b, 0.12)
-    var step := 36.0
-    var offset := fmod(float(Time.get_ticks_msec()) * 0.008, step)
-    for x in range(-1, int(w / step) + 2):
-        var px := float(x) * step + offset
-        draw_line(Vector2(px, 0), Vector2(px, h), grid_color, 1.0)
-    for y in range(-1, int(h / step) + 2):
-        var py := float(y) * step + offset
-        draw_line(Vector2(0, py), Vector2(w, py), grid_color, 1.0)
-    for i in range(8):
-        var px := fposmod(float(i) * 97.0 + 31.0, w)
-        var py := fposmod(float(i) * 139.0 + 47.0, h)
-        draw_circle(Vector2(px, py), 2.0, Color(accent.r, accent.g, accent.b, 0.45))
+    # Illustrated candy-sky playfield rather than the old technical grid.
+    draw_rect(Rect2(Vector2.ZERO, size), Color("#6b91e9"), true)
+    draw_rect(Rect2(Vector2(0, h * 0.62), Vector2(w, h * 0.38)), Color("#9e91ef"), true)
+    draw_circle(Vector2(w * 0.80, h * 0.18), 43.0, Color("#ffefb4", 0.88))
+    for i in range(7):
+        var cx: float = fposmod(35.0 + float(i) * 151.0, w)
+        var cy: float = h * (0.14 + float(i % 4) * 0.18)
+        draw_circle(Vector2(cx, cy), 19.0, Color("#ffffff", 0.58))
+        draw_circle(Vector2(cx + 18.0, cy + 4.0), 15.0, Color("#ffffff", 0.58))
+        draw_circle(Vector2(cx - 17.0, cy + 6.0), 13.0, Color("#ffffff", 0.58))
+    for i in range(11):
+        var px: float = fposmod(float(i) * 97.0 + 31.0, w)
+        var py: float = fposmod(float(i) * 139.0 + 47.0, h)
+        draw_circle(Vector2(px, py), 3.0, Color("#fff6cc", 0.78))
