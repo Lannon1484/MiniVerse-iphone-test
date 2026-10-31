@@ -77,7 +77,7 @@ func _shell():
     logo.add_theme_color_override("font_shadow_color", Color("#7c3aed"))
     logo.add_theme_constant_override("shadow_offset_x", 2)
     logo.add_theme_constant_override("shadow_offset_y", 3)
-    logo.add_theme_color_override("font_color", TEXT)
+    logo.add_theme_color_override("font_color", Color("#ffda78"))
     brand.add_child(logo)
     var subtitle := Label.new()
     subtitle.text = "A UNIVERSE OF QUICK FUN"
@@ -119,6 +119,30 @@ func _style(color: Color, radius := 14) -> StyleBoxFlat:
     s.content_margin_bottom = 10
     return s
 
+func _lobby_button_style(color: Color) -> StyleBoxFlat:
+    var style := _style(color, 20)
+    style.border_width_left = 2
+    style.border_width_right = 2
+    style.border_width_top = 2
+    style.border_width_bottom = 3
+    style.border_color = color.lightened(0.35)
+    style.shadow_color = Color("#050922", 0.6)
+    style.shadow_size = 5
+    style.shadow_offset = Vector2(0, 4)
+    return style
+
+func _lobby_card_style(accent: Color) -> StyleBoxFlat:
+    var style := _style(Color("#172858"), 20)
+    style.border_width_left = 2
+    style.border_width_right = 2
+    style.border_width_top = 2
+    style.border_width_bottom = 2
+    style.border_color = accent.darkened(0.12)
+    style.shadow_color = Color("#030a26", 0.6)
+    style.shadow_size = 5
+    style.shadow_offset = Vector2(0, 4)
+    return style
+
 func _button(text: String, cb: Callable, color := ACCENT, height := 56) -> Button:
     var b := Button.new()
     b.text = text
@@ -127,9 +151,9 @@ func _button(text: String, cb: Callable, color := ACCENT, height := 56) -> Butto
     b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     b.add_theme_font_size_override("font_size", 17)
     b.add_theme_color_override("font_color", Color("#17172b") if color == ACCENT or color == Color("#fbbf24") else TEXT)
-    b.add_theme_stylebox_override("normal", _style(color))
-    b.add_theme_stylebox_override("hover", _style(color.lightened(0.12)))
-    b.add_theme_stylebox_override("pressed", _style(color.darkened(0.12)))
+    b.add_theme_stylebox_override("normal", _lobby_button_style(color))
+    b.add_theme_stylebox_override("hover", _lobby_button_style(color.lightened(0.12)))
+    b.add_theme_stylebox_override("pressed", _lobby_button_style(color.darkened(0.12)))
     b.add_theme_stylebox_override("focus", _style(color.lightened(0.18)))
     b.add_theme_constant_override("outline_size", 0)
     b.pressed.connect(cb)
@@ -174,7 +198,7 @@ func home():
     _shell()
     # Mobile-first welcome panel with custom procedural fantasy artwork.
     var hero := PanelContainer.new()
-    hero.add_theme_stylebox_override("panel", _style(Color("#171849"), 22))
+    hero.add_theme_stylebox_override("panel", _style(Color("#243a82"), 22))
     content.add_child(hero)
     var hero_box := VBoxContainer.new()
     hero_box.add_theme_constant_override("separation", 0)
@@ -219,8 +243,8 @@ func home():
 
 func _game_card(g: Dictionary) -> PanelContainer:
     var card := PanelContainer.new()
-    card.custom_minimum_size.y = 126
-    card.add_theme_stylebox_override("panel", _style(Color("#18234c"), 20))
+    card.custom_minimum_size.y = 138
+    card.add_theme_stylebox_override("panel", _lobby_card_style(g.color))
     var row := HBoxContainer.new()
     row.add_theme_constant_override("separation", 12)
     card.add_child(row)
@@ -228,7 +252,7 @@ func _game_card(g: Dictionary) -> PanelContainer:
     var preview := GamePreview.new()
     preview.game_id = g.id
     preview.accent = g.color
-    preview.custom_minimum_size = Vector2(92, 98)
+    preview.custom_minimum_size = Vector2(102, 108)
     preview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     row.add_child(preview)
 

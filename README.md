@@ -58,3 +58,9 @@ This is a playable starter build, not a production-ready commercial release. It 
 
 
 Visual update: illustrated Fast Fingers target and candy-sky field; glossy rounded Number Merge tiles; floating-island Perfect Stack scenery and toy-like block highlights. Gameplay logic preserved.
+
+
+## Lobby artwork polish
+- New illustrated fantasy portal and floating-islands hero.
+- Gold title, colorful outlined game cards, glossy raised buttons.
+- Existing games, Recently Played and progress preserved.
