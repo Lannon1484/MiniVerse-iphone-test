@@ -46,6 +46,7 @@ var shop_category := "themes"
 var profile_section := "overview"
 var content: VBoxContainer
 var lobby_scroll: ScrollContainer
+var lobby_wallet_label: Label
 var lobby_touch_scrolling := true
 var coins := 0
 var xp := 0
@@ -61,6 +62,18 @@ var rng := RandomNumberGenerator.new()
 var sound_enabled := true
 var sound_player: AudioStreamPlayer
 var library_filter := "ALL"
+var favorite_games: Dictionary = {}
+var discovery_rewards_claimed: Dictionary = {}
+var discovery_notice := ""
+const DISCOVERY_COIN_REWARD := 35
+var collection_milestones_claimed: Dictionary = {}
+var collection_reward_notice := ""
+const COLLECTION_MILESTONES := [
+    {"count": 3, "title": "Curious Explorer", "coins": 75},
+    {"count": 5, "title": "Game Collector", "coins": 125},
+    {"count": 8, "title": "Arcade Adventurer", "coins": 200},
+    {"count": 10, "title": "MiniVerse Completionist", "coins": 350}
+]
 var seen_tutorials: Dictionary = {}
 var achievement_claimed: Dictionary = {}
 var total_games_played := 0
@@ -366,6 +379,7 @@ func _shell():
     wallet.add_theme_font_size_override("font_size", 18)
     wallet.add_theme_color_override("font_color", Color("#fcd34d"))
     wallet_group.add_child(wallet)
+    lobby_wallet_label = wallet
     var line := ColorRect.new()
     line.color = _theme_color().darkened(0.38)
     line.custom_minimum_size.y = 2
@@ -997,6 +1011,12 @@ func player_profile() -> void:
             if title_available and not title_equipped:
                 content.add_child(_button("EQUIP " + title_name.to_upper(), func(): _equip_profile_title(title_id), Color("#344a9b"), 48))
     if profile_section == "milestones":
+        var collected_count: int = _discovered_game_count()
+        var claimed_count: int = 0
+        for collection_milestone in COLLECTION_MILESTONES:
+            if bool(collection_milestones_claimed.get(str(collection_milestone["count"]), false)):
+                claimed_count += 1
+        _card("GAME COLLECTION", "%d / %d games discovered\\n%d / %d milestone rewards claimed\\nVisit Games to collect available milestone rewards." % [collected_count, GAMES.size(), claimed_count, COLLECTION_MILESTONES.size()])
         _heading("Player Ranks", "Rise through six ranks as your overall player level grows.")
         for rank_i in range(PLAYER_RANK_LEVELS.size()):
             var required_level: int = int(PLAYER_RANK_LEVELS[rank_i])
@@ -1130,6 +1150,14 @@ func home():
     quick_actions.add_child(_menu_button("MISSIONS", daily_missions, Color("#344a9b"), "missions", 54))
     _card("TODAY'S FEATURED GAME", _daily_feature_description())
     content.add_child(_button("VIEW DAILY GAME HISTORY", daily_game_history, Color("#344a9b"), 52))
+    var favorite_count: int = _favorite_game_count()
+    if favorite_count > 0:
+        _heading("Your Favorites", "%d saved game%s for quick access." % [favorite_count, "" if favorite_count == 1 else "s"])
+        for favorite_game in GAMES:
+            if bool(favorite_games.get(str(favorite_game.id), false)):
+                content.add_child(_game_card(favorite_game))
+    else:
+        _card("FAVORITE GAMES", "Save your favorite mini-games from the Game Library to find them here.")
     _heading("Recently Played", "Your last three games, ready to jump back into.")
     var shown := 0
     for recent_id in recent_games:
@@ -1141,6 +1169,26 @@ func home():
         _card("YOUR ADVENTURE STARTS HERE", "Play a game from the library and your three most recently played games will appear here.")
     content.add_child(_menu_button("BROWSE ALL GAMES", library, Color("#344a9b"), "library", 54))
     content.add_child(_menu_button("SETTINGS", settings, PANEL2, "settings", 48))
+
+func _toggle_game_favorite(id: String) -> void:
+    if bool(favorite_games.get(id, false)):
+        favorite_games.erase(id)
+    else:
+        favorite_games[id] = true
+    _save()
+    if current_tab == "games":
+        library()
+    else:
+        home()
+
+
+func _favorite_game_count() -> int:
+    var count: int = 0
+    for game in GAMES:
+        if bool(favorite_games.get(str(game.id), false)):
+            count += 1
+    return count
+
 
 func _game_card(g: Dictionary) -> PanelContainer:
     var card := PanelContainer.new()
@@ -1197,45 +1245,151 @@ func _game_card(g: Dictionary) -> PanelContainer:
     description.add_theme_font_size_override("font_size", 18)
     description.add_theme_color_override("font_color", Color("#e4eaff"))
     column.add_child(description)
+    var favorite_id: String = str(g.id)
+    var is_favorite: bool = bool(favorite_games.get(favorite_id, false))
+    var favorite_label: String = "REMOVE FROM FAVORITES" if is_favorite else "ADD TO FAVORITES"
+    var favorite_button := _button(favorite_label, func(): _toggle_game_favorite(favorite_id), Color("#344a76"), 52)
+    column.add_child(favorite_button)
     var play := _button("PLAY " + str(g.title).to_upper(), func(): launch(str(g.id)), g.color, 60)
     column.add_child(play)
     return card
 
 
-func library():
-    current_tab = "games"
-    _shell()
-    _heading("Game Library", "10 games · Find your next favorite.")
-    var filters := HFlowContainer.new()
-    filters.add_theme_constant_override("h_separation", 6)
-    filters.add_theme_constant_override("v_separation", 8)
-    content.add_child(filters)
-    for category in ["ALL", "ARCADE", "PUZZLE", "TIMING", "RELAXING"]:
-        var chip := _button(category, func():
-            library_filter = category
-            library()
-        , Color("#a78bfa") if library_filter == category else Color("#344a76"), 44)
-        chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-        chip.add_theme_font_size_override("font_size", 19)
-        filters.add_child(chip)
-    var count := 0
-    for g in GAMES:
-        if _matches_filter(g, library_filter):
-            content.add_child(_game_card(g))
-            count += 1
-    _card("%d GAMES" % count, "Choose any game to play instantly.")
+# A single primary category per game makes browsing predictable.
+# Existing game genre labels remain unchanged.
+const GAME_CATEGORIES := {
+    "fast": "REFLEX",
+    "merge": "PUZZLE",
+    "stack": "REFLEX",
+    "memory": "PUZZLE",
+    "whack": "ARCADE",
+    "sort": "STRATEGY",
+    "snake": "ARCADE",
+    "dots": "STRATEGY",
+    "hopper": "ARCADE",
+    "rhythm": "REFLEX"
+}
+
+const CATEGORY_DESCRIPTIONS := {
+    "ALL": "Browse the complete MiniVerse collection.",
+    "FAVORITES": "The games you've saved for quick access.",
+    "ARCADE": "Action, movement, and classic arcade fun.",
+    "PUZZLE": "Think, match, and solve at your own pace.",
+    "REFLEX": "Test your timing and quick reactions.",
+    "STRATEGY": "Plan your moves and solve each challenge."
+}
+
+
+func _category_game_count(category: String) -> int:
+    var result: int = 0
+    for game in GAMES:
+        if _matches_filter(game, category):
+            result += 1
+    return result
 
 
 func _matches_filter(g: Dictionary, category: String) -> bool:
     if category == "ALL":
         return true
-    var id: String = str(g.id)
-    match category:
-        "ARCADE": return id in ["fast", "whack", "snake", "hopper"]
-        "PUZZLE": return id in ["merge", "memory", "sort", "dots"]
-        "TIMING": return id in ["stack", "rhythm", "fast"]
-        "RELAXING": return id in ["memory", "sort", "dots", "merge"]
-    return true
+    if category == "FAVORITES":
+        return bool(favorite_games.get(str(g.id), false))
+    return str(GAME_CATEGORIES.get(str(g.id), "")) == category
+
+
+func _discovered_game_count() -> int:
+    var count: int = 0
+    for game in GAMES:
+        if int(game_play_counts.get(str(game.id), 0)) > 0:
+            count += 1
+    return count
+
+
+func _claim_all_collection_milestones() -> void:
+    var discovered: int = _discovered_game_count()
+    var total_coins: int = 0
+    var claimed_count: int = 0
+    for milestone in COLLECTION_MILESTONES:
+        var required_count: int = int(milestone["count"])
+        var milestone_key: String = str(required_count)
+        if discovered >= required_count and not bool(collection_milestones_claimed.get(milestone_key, false)):
+            collection_milestones_claimed[milestone_key] = true
+            total_coins += int(milestone["coins"])
+            claimed_count += 1
+    if claimed_count == 0:
+        return
+    coins += total_coins
+    collection_reward_notice = "%d collection milestone(s) claimed! +%d coins." % [claimed_count, total_coins]
+    _save()
+    # Refresh the library once, not once per reward. There are no other
+    # milestone claim buttons to return to after this action.
+    library()
+
+
+func _collection_milestone_cards() -> void:
+    var discovered: int = _discovered_game_count()
+    _heading("Collection Milestones", "Discover new games to unlock one-time coin rewards.")
+    if collection_reward_notice != "":
+        _card("COLLECTION REWARDS CLAIMED!", collection_reward_notice)
+        collection_reward_notice = ""
+    var ready_count: int = 0
+    var ready_coins: int = 0
+    for milestone in COLLECTION_MILESTONES:
+        var required_count: int = int(milestone["count"])
+        var claimed: bool = bool(collection_milestones_claimed.get(str(required_count), false))
+        var ready: bool = discovered >= required_count
+        if ready and not claimed:
+            ready_count += 1
+            ready_coins += int(milestone["coins"])
+        var state: String = "CLAIMED" if claimed else ("READY TO CLAIM" if ready else "IN PROGRESS")
+        _card(str(milestone["title"]).to_upper() + "  -  " + state,
+            "Discover %d / %d games. Reward: %d coins." % [mini(discovered, required_count), required_count, int(milestone["coins"])])
+    if ready_count > 0:
+        content.add_child(_button("CLAIM ALL %d REWARDS  (+%d COINS)" % [ready_count, ready_coins],
+            _claim_all_collection_milestones, _theme_color(), 60))
+    else:
+        _card("COLLECTION REWARDS", "All available milestone rewards have been claimed. Discover more games to unlock the rest.")
+
+
+func library(restore_scroll: int = -1):
+    current_tab = "games"
+    _shell()
+    _heading("Game Library", "Find your next favorite across %d mini-games." % GAMES.size())
+    var discovered: int = _discovered_game_count()
+    _card("GAME DISCOVERY  %d / %d" % [discovered, GAMES.size()], "Finish your first round in a new mini-game to earn %d bonus coins. Previously played games count as discovered." % DISCOVERY_COIN_REWARD)
+    _collection_milestone_cards()
+    _card("BROWSE BY CATEGORY", "Choose a category to narrow the collection. Your favorites stay one tap away.")
+
+    var filters := HFlowContainer.new()
+    filters.add_theme_constant_override("h_separation", 8)
+    filters.add_theme_constant_override("v_separation", 9)
+    content.add_child(filters)
+    for category in ["ALL", "FAVORITES", "ARCADE", "PUZZLE", "REFLEX", "STRATEGY"]:
+        var selected_category: String = category
+        var amount: int = _category_game_count(selected_category)
+        var chip_label: String = "%s (%d)" % [selected_category, amount]
+        var chip := _button(chip_label, func():
+            library_filter = selected_category
+            library()
+        , _theme_color() if library_filter == selected_category else Color("#344a76"), 54)
+        chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+        chip.add_theme_font_size_override("font_size", 19)
+        filters.add_child(chip)
+
+    var count: int = _category_game_count(library_filter)
+    _heading("%s  (%d)" % [library_filter, count], str(CATEGORY_DESCRIPTIONS.get(library_filter, "Browse the collection.")))
+    if count == 0:
+        if library_filter == "FAVORITES":
+            _card("NO FAVORITES YET", "Tap ADD TO FAVORITES on any game card to save it here.")
+        else:
+            _card("NO GAMES IN THIS CATEGORY", "Try another category to find a game.")
+    else:
+        for game in GAMES:
+            if _matches_filter(game, library_filter):
+                content.add_child(_game_card(game))
+
+    # Restore after layout calculates the new content height.
+    if restore_scroll >= 0 and is_instance_valid(lobby_scroll):
+        lobby_scroll.set_deferred("scroll_vertical", restore_scroll)
 
 func events():
     _shell()
@@ -2263,6 +2417,11 @@ func _finished(id: String, score: int, extra: Dictionary = {}):
     xp += earned_xp
     total_games_played += 1
     game_play_counts[id] = int(game_play_counts.get(id, 0)) + 1
+    discovery_notice = ""
+    if not bool(discovery_rewards_claimed.get(id, false)):
+        discovery_rewards_claimed[id] = true
+        coins += DISCOVERY_COIN_REWARD
+        discovery_notice = "NEW GAME DISCOVERED! +%d bonus coins for your first completed round of %s." % [DISCOVERY_COIN_REWARD, _game_name(id)]
     if passed:
         total_wins += 1
         game_win_counts[id] = int(game_win_counts.get(id, 0)) + 1
@@ -2312,6 +2471,9 @@ func _play_completed_rhythm_song(played_level: int) -> void:
 func _results(id: String, score: int, reward: int, record: bool, earned_xp: int, stars_earned: int, played_level: int, goal: int, passed: bool):
     _shell()
     _heading("Level Complete!" if passed else "Try Again!", "Level %d • %s" % [played_level, "Goal reached!" if passed else "You can retry this level."])
+    if discovery_notice != "":
+        _card("FIRST PLAY BONUS!", discovery_notice)
+        discovery_notice = ""
     if daily_feature_notice != "":
         _card("DAILY DASH", daily_feature_notice)
         daily_feature_notice = ""
@@ -2492,7 +2654,7 @@ func _save():
     _grant_milestone_cosmetics()
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"xp_curve_version":2,"last_rewarded_level":last_rewarded_level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day,"daily_feature_reward_day":daily_feature_reward_day,"daily_feature_history":daily_feature_history}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"xp_curve_version":2,"last_rewarded_level":last_rewarded_level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"favorite_games":favorite_games,"discovery_rewards_claimed":discovery_rewards_claimed,"collection_milestones_claimed":collection_milestones_claimed,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day,"daily_feature_reward_day":daily_feature_reward_day,"daily_feature_history":daily_feature_history}))
         f.close()
 
 func _load_save():
@@ -2531,6 +2693,9 @@ func _load_save():
             xp = _xp_for_level(old_level) + int(round(float(old_progress) * float(_xp_to_next_level(old_level)) / 100.0))
         last_rewarded_level = int(data.get("last_rewarded_level", level))
         last_rewarded_level = maxi(1, last_rewarded_level)
+        favorite_games = data.get("favorite_games", {})
+        if typeof(favorite_games) != TYPE_DICTIONARY:
+            favorite_games = {}
         best_scores = data.get("best_scores",{})
         best_stars = data.get("best_stars",{})
         seen_tutorials = data.get("seen_tutorials",{})
@@ -2539,6 +2704,17 @@ func _load_save():
         total_wins = int(data.get("total_wins", 0))
         game_play_counts = data.get("game_play_counts", {})
         game_win_counts = data.get("game_win_counts", {})
+        # Existing players already tried these games before this feature
+        # existed; don't award retroactive first-play bonuses.
+        collection_milestones_claimed = data.get("collection_milestones_claimed", {})
+        if typeof(collection_milestones_claimed) != TYPE_DICTIONARY:
+            collection_milestones_claimed = {}
+        discovery_rewards_claimed = data.get("discovery_rewards_claimed", {})
+        if typeof(discovery_rewards_claimed) != TYPE_DICTIONARY:
+            discovery_rewards_claimed = {}
+        for played_id in game_play_counts.keys():
+            if int(game_play_counts[played_id]) > 0:
+                discovery_rewards_claimed[str(played_id)] = true
         owned_themes = data.get("owned_themes", {"classic": true})
         owned_themes["classic"] = true
         _grant_milestone_cosmetics()
