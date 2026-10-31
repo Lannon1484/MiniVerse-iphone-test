@@ -2,8 +2,10 @@ extends Control
 class_name ConnectDots
 
 signal finished(game_id: String, score: int, extra: Dictionary)
+signal gameplay_sound(kind: String)
 
 const GRID := 5
+const Difficulty = preload("res://scripts/difficulty.gd")
 const COLORS := [Color("#ff79b2"), Color("#5fe0ff"), Color("#ffd36d"), Color("#a88bff")]
 # Every puzzle is built from four non-overlapping routes on a 5x5 board.
 # A seeded shuffle creates a reproducible, effectively unlimited level sequence.
@@ -94,6 +96,11 @@ func _generate_puzzle(puzzle_index: int) -> Array:
     # Leave one cell between paths so endpoints never overlap.
     var lengths: Array[int] = [3, 3, 3, 3]
     var spare: int = GRID * GRID - 3 - 12
+    # Easy early levels favor short connections; harder levels spread out.
+    if puzzle_index < 3:
+        spare = 0
+    elif puzzle_index < 6:
+        spare = 4
     for i in range(spare):
         lengths[puzzle_rng.randi_range(0, 3)] += 1
     var endpoints: Array = []
@@ -188,6 +195,8 @@ func _touch_cell(cell: Vector2i, beginning: bool) -> void:
     if cell == _endpoint(active_color, 1) and path[0] == _endpoint(active_color, 1):
         return
     path.append(cell)
+    if cell == destination:
+        gameplay_sound.emit("connect")
     _refresh()
     if _connected_count() == COLORS.size():
         won = true

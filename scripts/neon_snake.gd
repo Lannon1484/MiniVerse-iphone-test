@@ -3,6 +3,8 @@ extends Control
 signal finished(game_id: String, score: int, extra: Dictionary)
 
 const GRID_SIZE := 15
+const Difficulty = preload("res://scripts/difficulty.gd")
+var difficulty_level: int = 1
 const SKY := Color("#10183c")
 const AQUA := Color("#58edc4")
 const GOLD := Color("#ffcc67")
@@ -131,6 +133,7 @@ class DirectionArrow extends Control:
         draw_circle(center - axis * length * 0.14, 3.5, Color("#a6faff"))
 
 func _restart() -> void:
+    difficulty_level = Difficulty.level("snake")
     snake.clear()
     snake.append(Vector2i(6, 7))
     snake.append(Vector2i(5, 7))
@@ -152,7 +155,7 @@ func _process(delta: float) -> void:
     if not playing:
         return
     accumulator += minf(delta, 0.1)
-    var step_time: float = maxf(0.095, 0.19 - float(eaten) * 0.006)
+    var step_time: float = maxf(0.105, 0.245 - float(difficulty_level - 1) * 0.008 - float(eaten) * 0.004)
     if accumulator >= step_time:
         accumulator -= step_time
         _step()

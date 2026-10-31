@@ -16,7 +16,18 @@ const WhackAMole = preload("res://scripts/whack_a_mole.gd")
 const ColorSort = preload("res://scripts/color_sort.gd")
 const NeonSnake = preload("res://scripts/neon_snake.gd")
 const ConnectDots = preload("res://scripts/connect_dots.gd")
+const Difficulty = preload("res://scripts/difficulty.gd")
 const SkyHopper = preload("res://scripts/sky_hopper.gd")
+const RhythmRush = preload("res://scripts/rhythm_rush.gd")
+const RewardConfetti = preload("res://scripts/reward_confetti.gd")
+const GameplaySparkles = preload("res://scripts/gameplay_sparkles.gd")
+const SFX_TAP = preload("res://assets/sfx/tap.wav")
+const SFX_START = preload("res://assets/sfx/start.wav")
+const SFX_WIN = preload("res://assets/sfx/win.wav")
+const SFX_COLLECT = preload("res://assets/sfx/collect.wav")
+const SFX_POUR = preload("res://assets/sfx/pour.wav")
+const SFX_CONNECT = preload("res://assets/sfx/connect.wav")
+const SFX_OOPS = preload("res://assets/sfx/oops.wav")
 const GAMES := [
     {"id":"fast","title":"Fast Fingers","genre":"REFLEX ARCADE","desc":"Tap targets before time runs out.","color":Color("#f9738f")},
     {"id":"merge","title":"Number Merge","genre":"PUZZLE","desc":"Merge matching tiles to reach bigger numbers.","color":Color("#60a5fa")},
@@ -26,7 +37,8 @@ const GAMES := [
     {"id":"sort","title":"Color Sort","genre":"RELAXING PUZZLE","desc":"Pour colorful liquids into matching tubes.","color":Color("#c084fc")},
     {"id":"snake","title":"Neon Snake","genre":"ARCADE","desc":"Collect glowing stars and grow your snake.","color":Color("#58edc4")},
     {"id":"dots","title":"Connect the Dots","genre":"PUZZLE","desc":"Draw glowing paths between matching colors.","color":Color("#ff79b2")},
-    {"id":"hopper","title":"Sky Hopper","genre":"ARCADE PLATFORMER","desc":"Hop between floating islands and collect stars.","color":Color("#9bd8ff")}
+    {"id":"hopper","title":"Sky Hopper","genre":"ARCADE PLATFORMER","desc":"Hop between floating islands and collect stars.","color":Color("#9bd8ff")},
+    {"id":"rhythm","title":"Rhythm Rush","genre":"TIMING ARCADE","desc":"Tap glowing notes on the beat line.","color":Color("#fb86d5")}
 ]
 
 var content: VBoxContainer
@@ -40,10 +52,16 @@ var recent_games: Array[String] = []
 var game_id := ""
 var game_root: Control
 var rng := RandomNumberGenerator.new()
+var sound_enabled := true
+var sound_player: AudioStreamPlayer
+var library_filter := "ALL"
 
 func _ready():
     rng.randomize()
     _load_save()
+    sound_player = AudioStreamPlayer.new()
+    sound_player.volume_db = -11.0
+    add_child(sound_player)
     _shell()
     home()
 
@@ -59,7 +77,8 @@ func _input(event: InputEvent) -> void:
 func _shell():
     lobby_touch_scrolling = true
     for c in get_children():
-        c.queue_free()
+        if c != sound_player:
+            c.queue_free()
     var bg := ColorRect.new()
     bg.color = BG
     bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -184,9 +203,17 @@ func _button(text: String, cb: Callable, color := ACCENT, height := 56) -> Butto
     b.add_theme_stylebox_override("pressed", _lobby_button_style(color.darkened(0.12)))
     b.add_theme_stylebox_override("focus", _style(color.lightened(0.18)))
     b.add_theme_constant_override("outline_size", 0)
-    b.pressed.connect(cb)
+    b.pressed.connect(func():
+        _play_sound(SFX_TAP)
+        cb.call()
+    )
     TouchFeedback.attach(b)
     return b
+
+func _play_sound(stream: AudioStream) -> void:
+    if sound_enabled and is_instance_valid(sound_player):
+        sound_player.stream = stream
+        sound_player.play()
 
 func _heading(title: String, subtitle := ""):
     var box := VBoxContainer.new()
@@ -204,7 +231,7 @@ func _heading(title: String, subtitle := ""):
         s.add_theme_color_override("font_color", MUTED)
         box.add_child(s)
 
-func _card(title: String, body: String):
+func _card(title: String, body: String) -> PanelContainer:
     var p := PanelContainer.new()
     p.add_theme_stylebox_override("panel", _style(PANEL, 18))
     content.add_child(p)
@@ -221,6 +248,7 @@ func _card(title: String, body: String):
     d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     d.add_theme_color_override("font_color", MUTED)
     v.add_child(d)
+    return p
 
 func home():
     _shell()
@@ -273,7 +301,7 @@ func home():
 
 func _game_card(g: Dictionary) -> PanelContainer:
     var card := PanelContainer.new()
-    card.custom_minimum_size.y = 138
+    card.custom_minimum_size.y = 126
     card.add_theme_stylebox_override("panel", _lobby_card_style(g.color))
     var row := HBoxContainer.new()
     row.add_theme_constant_override("separation", 12)
@@ -282,7 +310,7 @@ func _game_card(g: Dictionary) -> PanelContainer:
     var preview := GamePreview.new()
     preview.game_id = g.id
     preview.accent = g.color
-    preview.custom_minimum_size = Vector2(102, 108)
+    preview.custom_minimum_size = Vector2(94, 98)
     preview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     row.add_child(preview)
 
@@ -322,16 +350,43 @@ func _game_card(g: Dictionary) -> PanelContainer:
 
 func library():
     _shell()
-    _heading("Game Library", "Choose a game and start playing.")
+    _heading("Game Library", "10 games · Find your next favorite.")
+    var filters := HFlowContainer.new()
+    filters.add_theme_constant_override("h_separation", 6)
+    filters.add_theme_constant_override("v_separation", 8)
+    content.add_child(filters)
+    for category in ["ALL", "ARCADE", "PUZZLE", "TIMING", "RELAXING"]:
+        var chip := _button(category, func():
+            library_filter = category
+            library()
+        , Color("#a78bfa") if library_filter == category else Color("#344a76"), 44)
+        chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+        chip.add_theme_font_size_override("font_size", 13)
+        filters.add_child(chip)
+    var count := 0
     for g in GAMES:
-        content.add_child(_game_card(g))
-    content.add_child(_button("← BACK TO HOME", home, PANEL2))
+        if _matches_filter(g, library_filter):
+            content.add_child(_game_card(g))
+            count += 1
+    _card("%d GAMES" % count, "Choose any game to play instantly.")
+    content.add_child(_button("BACK TO HOME", home, PANEL2))
+
+func _matches_filter(g: Dictionary, category: String) -> bool:
+    if category == "ALL":
+        return true
+    var id: String = str(g.id)
+    match category:
+        "ARCADE": return id in ["fast", "whack", "snake", "hopper"]
+        "PUZZLE": return id in ["merge", "memory", "sort", "dots"]
+        "TIMING": return id in ["stack", "rhythm", "fast"]
+        "RELAXING": return id in ["memory", "sort", "dots", "merge"]
+    return true
 
 func events():
     _shell()
     _heading("Challenges & Events", "Event previews for the growing MiniVerse.")
     var day_key := int(Time.get_unix_time_from_system() / 86400.0)
-    var challenge_ids := ["fast", "merge", "stack", "memory", "whack", "sort", "snake", "dots", "hopper"]
+    var challenge_ids := ["fast", "merge", "stack", "memory", "whack", "sort", "snake", "dots", "hopper", "rhythm"]
     var challenge_id: String = challenge_ids[day_key % challenge_ids.size()]
     _card("☀ DAILY DASH", "Today's featured game: %s. Finish a round to earn coins and XP." % _game_name(challenge_id))
     content.add_child(_button("▶  PLAY DAILY CHALLENGE", _daily_challenge, Color("#fbbf24")))
@@ -343,8 +398,14 @@ func settings():
     _shell()
     _heading("Settings", "Local starter build settings.")
     _card("SAVE DATA", "Progress is stored on this device in Godot's user data folder.")
+    content.add_child(_button("SOUND EFFECTS: ON" if sound_enabled else "SOUND EFFECTS: OFF", _toggle_sound, Color("#344a9b")))
     content.add_child(_button("RESET LOCAL PROGRESS", reset_progress, Color("#f9738f")))
     content.add_child(_button("← BACK TO HOME", home, PANEL2))
+
+func _toggle_sound() -> void:
+    sound_enabled = not sound_enabled
+    _save()
+    settings()
 
 func reset_progress():
     coins = 0
@@ -358,6 +419,7 @@ func _random_game():
     launch(GAMES[rng.randi_range(0, GAMES.size()-1)].id)
 
 func launch(id: String):
+    _play_sound(SFX_START)
     game_id = id
     recent_games.erase(id)
     recent_games.push_front(id)
@@ -374,8 +436,18 @@ func launch(id: String):
         "snake": _play_snake()
         "dots": _play_dots()
         "hopper": _play_hopper()
+        "rhythm": _play_rhythm()
+
+func _gameplay_sound(kind: String) -> void:
+    match kind:
+        "collect": _play_sound(SFX_COLLECT)
+        "pour": _play_sound(SFX_POUR)
+        "connect": _play_sound(SFX_CONNECT)
+        "oops": _play_sound(SFX_OOPS)
 
 func _mount_game(g: Control):
+    if g.has_signal("gameplay_sound"):
+        g.connect("gameplay_sound", _gameplay_sound)
     _shell()
     lobby_touch_scrolling = false
     game_root = g
@@ -387,6 +459,16 @@ func _mount_game(g: Control):
     content.add_child(g)
     g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     g.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    call_deferred("_attach_gameplay_sparkles", g)
+
+func _attach_gameplay_sparkles(g: Control) -> void:
+    if not is_instance_valid(g) or not g.is_inside_tree():
+        return
+    var effect: Control = GameplaySparkles.new()
+    effect.set("tracked_game", g)
+    effect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    g.add_child(effect)
+    effect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 func _play_fast():
     var g := FastFingers.new()
@@ -445,27 +527,72 @@ func _play_hopper():
     _mount_game(g)
     g.start_game()
 
+func _play_rhythm():
+    var g := RhythmRush.new()
+    g.sound_enabled = sound_enabled
+    g.finished.connect(_finished)
+    _mount_game(g)
+    g.start_game()
+
 func _daily_challenge():
     # Local daily rotation; does not require an online backend.
     var day_key := int(Time.get_unix_time_from_system() / 86400.0)
-    var challenge_ids := ["fast", "merge", "stack", "memory", "whack", "sort", "snake", "dots", "hopper"]
+    var challenge_ids := ["fast", "merge", "stack", "memory", "whack", "sort", "snake", "dots", "hopper", "rhythm"]
     launch(challenge_ids[day_key % challenge_ids.size()])
 
 func _finished(id: String, score: int, extra: Dictionary = {}):
+    Difficulty.complete(id)
     var record := score > int(best_scores.get(id, 0))
     if record:
         best_scores[id] = score
-    var reward := maxi(5, int(score / 5.0) + 5)
+    # Capped rewards keep different games from inflating the economy.
+    var reward := clampi(5 + int(sqrt(float(maxi(score, 0))) * 1.8), 5, 75)
+    var earned_xp := clampi(10 + int(sqrt(float(maxi(score, 0))) * 2.5), 10, 110)
     coins += reward
-    xp += maxi(5, int(score / 2.0) + 5)
+    xp += earned_xp
     level = int(xp / 100) + 1
     _save()
-    _results(id, score, reward, record)
+    _play_sound(SFX_WIN)
+    _results(id, score, reward, record, earned_xp)
 
-func _results(id: String, score: int, reward: int, record: bool):
+func _results(id: String, score: int, reward: int, record: bool, earned_xp: int):
     _shell()
     _heading("Round Complete", "Every attempt makes you better.")
-    _card(_game_name(id), "FINAL SCORE\n\n%d\n\n%s\n\n+%d coins  ·  +%d XP" % [score, "✦ NEW PERSONAL BEST!" if record else "Personal best: %d" % int(best_scores.get(id,0)), reward, maxi(5, int(score/2.0)+5)])
+    var celebration := PanelContainer.new()
+    celebration.add_theme_stylebox_override("panel", _style(Color("#25234e"), 22))
+    content.add_child(celebration)
+    var column := VBoxContainer.new()
+    column.add_theme_constant_override("separation", 9)
+    celebration.add_child(column)
+    var stars := Label.new()
+    stars.text = "★ ★ ★" if record else "★ ★ ☆"
+    stars.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    stars.add_theme_font_size_override("font_size", 39)
+    stars.add_theme_color_override("font_color", Color("#ffdb78"))
+    column.add_child(stars)
+    var title := Label.new()
+    title.text = "NEW PERSONAL BEST!" if record else "NICE ROUND!"
+    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    title.add_theme_font_size_override("font_size", 23)
+    title.add_theme_color_override("font_color", Color("#8eeaff") if record else TEXT)
+    column.add_child(title)
+    var result := Label.new()
+    result.text = "%s\n\nSCORE  %d\n\n+%d COINS     +%d XP" % [_game_name(id), score, reward, earned_xp]
+    result.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    result.add_theme_font_size_override("font_size", 21)
+    result.add_theme_color_override("font_color", TEXT)
+    column.add_child(result)
+    celebration.modulate.a = 0.0
+    celebration.scale = Vector2(0.94, 0.94)
+    var reveal := create_tween()
+    reveal.set_parallel(true)
+    reveal.tween_property(celebration, "modulate:a", 1.0, 0.42)
+    reveal.tween_property(celebration, "scale", Vector2.ONE, 0.42).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    # Confetti is drawn above the results without blocking buttons or scrolling.
+    var confetti := RewardConfetti.new()
+    confetti.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    confetti.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(confetti)
     content.add_child(_button("↻  PLAY AGAIN", func(): launch(id), ACCENT))
     content.add_child(_button("⌂  BACK TO MINIVERSE", home, PANEL2))
 
@@ -484,7 +611,7 @@ func _game_name(id: String) -> String:
 func _save():
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"recent_games":recent_games}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"recent_games":recent_games,"sound_enabled":sound_enabled}))
         f.close()
 
 func _load_save():
@@ -494,6 +621,7 @@ func _load_save():
     var data = JSON.parse_string(f.get_as_text())
     f.close()
     if typeof(data) == TYPE_DICTIONARY:
+        sound_enabled = bool(data.get("sound_enabled", true))
         coins = int(data.get("coins",0))
         xp = int(data.get("xp",0))
         level = int(data.get("level",1))

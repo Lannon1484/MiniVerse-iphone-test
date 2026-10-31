@@ -8,6 +8,8 @@ var block_width := 220.0
 var block_height := 30.0
 var block_x := 0.0
 var direction := 1.0
+const Difficulty = preload("res://scripts/difficulty.gd")
+var difficulty_level: int = 1
 var speed := 220.0
 var area
 var score_label: Label
@@ -50,7 +52,8 @@ func _restart():
     var centered_x: float = maxf(0.0, (play_width - block_width) / 2.0)
     block_x = centered_x
     direction = 1.0
-    speed = 160.0
+    difficulty_level = Difficulty.level("stack")
+    speed = minf(235.0, 115.0 + float(difficulty_level - 1) * 7.0)
     tower.clear()
     tower.append(Rect2(centered_x, 0.0, block_width, block_height))
     score_label.text = "HEIGHT 0"
@@ -105,7 +108,7 @@ func _drop():
     tower.append(Rect2(block_x, 0.0, block_width, block_height))
     if is_instance_valid(area) and area.has_method("trigger_drop_effect"):
         area.trigger_drop_effect(block_x + block_width * 0.5, tower.size() - 1, colors[(tower.size() - 1) % colors.size()])
-    score+=1; speed+=20
+    score+=1; speed+=minf(20.0, 9.0 + float(difficulty_level - 1))
     score_label.text="HEIGHT %d"%score; hint.text="✦ BLOCK PLACED! Height %d — time your next drop." % score
     score_label.scale = Vector2(0.85, 0.85)
     var score_tween := create_tween()

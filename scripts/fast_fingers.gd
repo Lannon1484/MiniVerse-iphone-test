@@ -3,6 +3,9 @@ class_name FastFingers
 const ArcadeField = preload("res://scripts/arcade_field.gd")
 const TARGET_PICTURE = preload("res://assets/classic_games/fast_target.png")
 signal finished(game_id: String, score: int, extra: Dictionary)
+signal gameplay_sound(kind: String)
+const Difficulty = preload("res://scripts/difficulty.gd")
+var difficulty_level: int = 1
 var time_left := 20.0
 var score := 0
 var combo := 0
@@ -16,6 +19,8 @@ var rng := RandomNumberGenerator.new()
 
 func start_game():
     rng.randomize()
+    difficulty_level = Difficulty.level("fast")
+    time_left = 25.0 if difficulty_level <= 3 else 20.0
     var root := VBoxContainer.new()
     root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.add_theme_constant_override("separation", 12)
@@ -79,15 +84,16 @@ func _spawn():
     target.icon = TARGET_PICTURE
     target.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
     target.expand_icon = true
-    target.custom_minimum_size = Vector2(92,92)
+    var target_size: float = maxf(58.0, 112.0 - float(difficulty_level - 1) * 3.0)
+    target.custom_minimum_size = Vector2(target_size, target_size)
     target.add_theme_font_size_override("font_size",32)
     target.add_theme_color_override("font_color", Color("#17172b"))
     target.add_theme_stylebox_override("hover", _round(Color("#ffffff")))
     target.add_theme_stylebox_override("pressed", _round(Color("#e0e7ff")))
     target.add_theme_stylebox_override("normal",_round(Color("#33376b")))
     area.add_child(target)
-    target.position = Vector2(rng.randf_range(0,maxf(0,area.size.x-92)),rng.randf_range(0,maxf(0,area.size.y-92)))
-    target.pivot_offset = Vector2(46, 46)
+    target.position = Vector2(rng.randf_range(0,maxf(0,area.size.x-target_size)),rng.randf_range(0,maxf(0,area.size.y-target_size)))
+    target.pivot_offset = Vector2(target_size * 0.5, target_size * 0.5)
     target.scale = Vector2(0.55, 0.55)
     var appear := create_tween()
     appear.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -102,6 +108,7 @@ func _round(c: Color) -> StyleBoxFlat:
 
 func _hit():
     if not running: return
+    gameplay_sound.emit("collect")
     var hit_position: Vector2 = target.position + target.size * 0.5
     _floating_score(hit_position, 10 + mini(combo, 10) * 2)
     combo += 1

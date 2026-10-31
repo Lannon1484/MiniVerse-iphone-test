@@ -2,8 +2,11 @@ extends Control
 class_name ColorSort
 
 signal finished(game_id: String, score: int, extra: Dictionary)
+signal gameplay_sound(kind: String)
 
 const CAPACITY := 4
+const Difficulty = preload("res://scripts/difficulty.gd")
+var difficulty_level: int = 1
 const PALETTE := [Color("#ff739f"), Color("#55d9ff"), Color("#ffd15b"), Color("#83e69b")]
 const LABELS := ["PINK", "BLUE", "GOLD", "GREEN"]
 
@@ -101,6 +104,7 @@ func _tube_style(highlight: bool) -> StyleBoxFlat:
     return style
 
 func _new_game() -> void:
+    difficulty_level = Difficulty.level("sort")
     selected = -1
     moves = 0
     completed = false
@@ -115,6 +119,11 @@ func _new_game() -> void:
         for j in range(CAPACITY):
             pieces.append(color_id)
     pieces.shuffle()
+    if difficulty_level <= 2:
+        # Two already-sorted colors make the first puzzle easier to understand.
+        pieces = [0, 0, 0, 0, 1, 1, 1, 1] + [2, 3, 2, 3, 2, 3, 2, 3]
+    elif difficulty_level <= 4:
+        pieces = [0, 0, 0, 0] + pieces.slice(4)
     for i in range(4):
         var tube: Array[int] = []
         for j in range(CAPACITY):
@@ -154,6 +163,7 @@ func _pick(index: int) -> void:
     while not from.is_empty() and from.back() == moved_color and to.size() < CAPACITY:
         to.append(from.pop_back())
     moves += 1
+    gameplay_sound.emit("pour")
     selected = -1
     animating = true
     status.text = "Pouring..."

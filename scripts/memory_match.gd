@@ -3,6 +3,8 @@ class_name MemoryMatch
 
 signal finished(game_id: String, score: int, extra: Dictionary)
 
+const Difficulty = preload("res://scripts/difficulty.gd")
+var difficulty_level: int = 1
 const CARD_BACK = preload("res://assets/memory_symbols/card_back.png")
 const SYMBOLS := ["star", "heart", "moon", "diamond", "flower", "sun", "rocket", "cloud"]
 const PICTURES := {
@@ -32,6 +34,11 @@ var moves_label: Label
 var score_label: Label
 var grid: GridContainer
 var running := true
+var next_button: Button
+var claim_button: Button
+var round_completed := false
+var round_score := 0
+var round_serial := 0
 
 func start_game() -> void:
     _build_ui()
@@ -79,6 +86,30 @@ func _build_ui() -> void:
     restart.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     restart.pressed.connect(_new_round)
     root.add_child(restart)
+    next_button = Button.new()
+    next_button.text = "NEXT LEVEL"
+    next_button.custom_minimum_size.y = 68
+    next_button.visible = false
+    next_button.pressed.connect(_next_level)
+    root.add_child(next_button)
+    claim_button = Button.new()
+    claim_button.text = "CLAIM REWARD & FINISH"
+    claim_button.custom_minimum_size.y = 60
+    claim_button.visible = false
+    claim_button.pressed.connect(_claim_reward)
+    root.add_child(claim_button)
+
+func _next_level() -> void:
+    if not round_completed:
+        return
+    Difficulty.complete("memory")
+    _new_round()
+
+func _claim_reward() -> void:
+    if not round_completed:
+        return
+    round_completed = false
+    finished.emit("memory", round_score, {"moves": moves, "pairs": pairs_found})
 
 func _stat_label(value: String) -> Label:
     var label := Label.new()
@@ -90,11 +121,23 @@ func _stat_label(value: String) -> Label:
     return label
 
 func _new_round() -> void:
+    difficulty_level = Difficulty.level("memory")
+    round_serial += 1
+    var this_round: int = round_serial
+    round_completed = false
+    if is_instance_valid(next_button):
+        next_button.visible = false
+    if is_instance_valid(claim_button):
+        claim_button.visible = false
     cards.clear(); buttons.clear(); matched.clear()
     first_pick = -1; lock_board = false; moves = 0; pairs_found = 0; score = 0; running = true
-    for symbol in SYMBOLS:
+    var pair_count: int = mini(8, 3 + difficulty_level)
+    for i in range(pair_count):
+        var symbol: String = SYMBOLS[i]
         cards.append(symbol); cards.append(symbol)
+    grid.columns = 4 if pair_count >= 5 else 3
     cards.shuffle()
+    # First rounds show cards briefly to teach the symbols.
     for child in grid.get_children(): child.queue_free()
     for i in range(cards.size()):
         matched.append(false)
@@ -117,7 +160,19 @@ func _new_round() -> void:
         button.pressed.connect(_pick.bind(i))
         grid.add_child(button); buttons.append(button)
     _refresh_stats()
-    status_label.text = "Tap any card to reveal it."
+    status_label.text = "Level %d • Find %d pairs!" % [difficulty_level, pair_count]
+    if difficulty_level <= 3:
+        lock_board = true
+        status_label.text = "Memorize the pictures!"
+        for i in range(buttons.size()):
+            buttons[i].icon = PICTURES[cards[i]]
+        await get_tree().create_timer(4.0 if difficulty_level == 1 else 2.5).timeout
+        if not is_inside_tree() or this_round != round_serial:
+            return
+        for i in range(buttons.size()):
+            buttons[i].icon = CARD_BACK
+        lock_board = false
+        status_label.text = "Level %d • Find the matching pictures!" % difficulty_level
 
 func _card_style(color: Color) -> StyleBoxFlat:
     var style := StyleBoxFlat.new()
@@ -150,14 +205,18 @@ func _pick(index: int) -> void:
         pairs_found += 1
         score += maxi(20, 100 - moves * 2)
         first_pick = -1
-        status_label.text = "Match found! %d of 8 pairs." % pairs_found
+        status_label.text = "Level %d • %d of %d pairs." % [difficulty_level, pairs_found, int(cards.size() / 2)]
         _refresh_stats()
-        if pairs_found == 8:
+        if pairs_found == int(cards.size() / 2):
             running = false
             score += maxi(0, 200 - moves * 5)
             _refresh_stats()
             status_label.text = "✨ All pairs found in %d moves!" % moves
-            finished.emit("memory", score, {"moves": moves, "pairs": pairs_found})
+            round_completed = true
+            round_score = score
+            next_button.visible = true
+            claim_button.visible = true
+            status_label.text = "Level %d complete! Choose NEXT LEVEL to keep playing." % difficulty_level
     else:
         lock_board = true
         status_label.text = "Not a match — try again!"

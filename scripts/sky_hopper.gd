@@ -9,6 +9,8 @@ const HEIGHT := 610.0
 const GRAVITY := 1150.0
 const JUMP := -525.0
 const SPEED := 235.0
+const Difficulty = preload("res://scripts/difficulty.gd")
+var difficulty_level: int = 1
 
 var player := Vector2(180, 440)
 var velocity := Vector2.ZERO
@@ -76,13 +78,15 @@ func start_game() -> void:
     _restart()
 
 func _restart() -> void:
+    difficulty_level = Difficulty.level("hopper")
     player = Vector2(180, 440)
     velocity = Vector2(0, JUMP)
     platforms = [Vector2(180, 495)]
     stars.clear()
     for i in range(1, 30):
-        var y: float = 495.0 - i * 102.0
-        var x: float = rng.randf_range(70, 290)
+        var spacing: float = minf(112.0, 85.0 + float(difficulty_level - 1) * 2.0)
+        var y: float = 495.0 - i * spacing
+        var x: float = rng.randf_range(110.0 - minf(40.0, float(difficulty_level - 1) * 3.0), 250.0 + minf(40.0, float(difficulty_level - 1) * 3.0))
         platforms.append(Vector2(x, y))
         if i % 2 == 0:
             stars.append(Vector2(x, y - 49))

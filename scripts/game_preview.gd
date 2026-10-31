@@ -95,6 +95,16 @@ func _draw() -> void:
                 draw_circle(center_hole + Vector2(5, -6), 2.0, Color("#173c3a"))
             elif i == 3:
                 draw_circle(center_hole + Vector2(0, -4), hole_radius * 0.8, Color("#fb7185"))
+    elif game_id == "rhythm":
+        for i in range(4):
+            var lane_w: float = w / 4.0
+            var color: Color = [Color("#ff82bd"), Color("#76d9ff"), Color("#ffe18b"), Color("#a58bff")][i]
+            var x: float = (float(i) + 0.5) * lane_w
+            draw_rect(Rect2(float(i) * lane_w + 2.0, 5.0, lane_w - 4.0, h - 10.0), Color(color.r, color.g, color.b, 0.14))
+            var y: float = h * (0.25 + float((i * 3) % 4) * 0.15)
+            draw_circle(Vector2(x, y), lane_w * 0.34, color)
+            draw_circle(Vector2(x - 3.0, y - 3.0), 3.0, Color.WHITE)
+        draw_line(Vector2(0.0, h * 0.8), Vector2(w, h * 0.8), Color("#d9faff"), 4.0)
     elif game_id == "memory":
         # Four playful face-up cards with distinct symbols for Memory Match.
         var card_w: float = w * 0.28

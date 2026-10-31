@@ -2,8 +2,11 @@ extends Control
 class_name WhackAMole
 
 signal finished(game_id: String, score: int, extra: Dictionary)
+signal gameplay_sound(kind: String)
 
 const ROUND_SECONDS := 45.0
+const Difficulty = preload("res://scripts/difficulty.gd")
+var difficulty_level: int = 1
 const MOLE_IMAGE := preload("res://assets/whack/mole.png")
 const SNAKE_IMAGE := preload("res://assets/whack/snake.png")
 const HOLE_IMAGE := preload("res://assets/whack/hole.png")
@@ -103,6 +106,7 @@ func _style(color: Color) -> StyleBoxFlat:
     return s
 
 func _restart() -> void:
+    difficulty_level = Difficulty.level("whack")
     playing = true
     seconds_left = ROUND_SECONDS
     next_spawn = 0.4
@@ -146,8 +150,8 @@ func _process(delta: float) -> void:
 
 func _spawn() -> void:
     active_slot = rng.randi_range(0, 8)
-    active_decoy = rng.randf() < 0.18
-    visible_for = maxf(0.65, 1.35 - float(hits) * 0.018)
+    active_decoy = rng.randf() < minf(0.29, 0.06 + float(difficulty_level - 1) * 0.015)
+    visible_for = maxf(0.70, 1.85 - float(difficulty_level - 1) * 0.065 - float(hits) * 0.009)
     var b := slots[active_slot]
     b.text = ""
     b.icon = SNAKE_IMAGE if active_decoy else MOLE_IMAGE
@@ -160,10 +164,12 @@ func _tap(index: int) -> void:
         return
     if index == active_slot:
         if active_decoy:
+            gameplay_sound.emit("oops")
             combo = 0
             score = maxi(0, score - 25)
             message_label.text = "Oops! You hit a snake: -25"
         else:
+            gameplay_sound.emit("collect")
             hits += 1
             combo += 1
             var points := 10 + mini(combo, 10) * 2
@@ -172,6 +178,7 @@ func _tap(index: int) -> void:
         _clear_target()
         next_spawn = 0.15
     else:
+        gameplay_sound.emit("oops")
         combo = 0
         misses += 1
         message_label.text = "Empty hole! Keep looking."

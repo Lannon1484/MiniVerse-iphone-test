@@ -2,6 +2,8 @@ extends Control
 class_name NumberMerge
 signal finished(game_id: String, score: int, extra: Dictionary)
 const N := 4
+const Difficulty = preload("res://scripts/difficulty.gd")
+var difficulty_level: int = 1
 var board: Array = []
 var score := 0
 var moves := 0
@@ -18,6 +20,7 @@ func start_game():
     _new_board()
 
 func _new_board():
+    difficulty_level = Difficulty.level("merge")
     board.clear(); score=0; moves=0; selected=Vector2i(-1,-1); running=true
     # Start with a full 4x4 board rather than only two tiles.
     # Weighted values keep early moves approachable, and the top-left pair
@@ -27,9 +30,9 @@ func _new_board():
         for x in range(N):
             var roll := rng.randi_range(0, 5)
             var value := 2
-            if roll >= 4:
+            if roll >= (5 if difficulty_level <= 2 else 4):
                 value = 4
-            elif roll == 3:
+            elif roll == 3 and difficulty_level >= 4:
                 value = 8
             row.append(value)
         board.append(row)
