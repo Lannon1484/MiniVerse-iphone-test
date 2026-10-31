@@ -15,6 +15,7 @@ const MemoryMatch = preload("res://scripts/memory_match.gd")
 const WhackAMole = preload("res://scripts/whack_a_mole.gd")
 const ColorSort = preload("res://scripts/color_sort.gd")
 const NeonSnake = preload("res://scripts/neon_snake.gd")
+const ConnectDots = preload("res://scripts/connect_dots.gd")
 const GAMES := [
     {"id":"fast","title":"Fast Fingers","genre":"REFLEX ARCADE","desc":"Tap targets before time runs out.","color":Color("#f9738f")},
     {"id":"merge","title":"Number Merge","genre":"PUZZLE","desc":"Merge matching tiles to reach bigger numbers.","color":Color("#60a5fa")},
@@ -22,7 +23,8 @@ const GAMES := [
     {"id":"memory","title":"Memory Match","genre":"BRAIN TRAINER","desc":"Flip cards and find all matching pairs.","color":Color("#34d399")},
     {"id":"whack","title":"Whack-a-Mole","genre":"REFLEX ARCADE","desc":"Whack moles, avoid snakes!","color":Color("#38d9b4")},
     {"id":"sort","title":"Color Sort","genre":"RELAXING PUZZLE","desc":"Pour colorful liquids into matching tubes.","color":Color("#c084fc")},
-    {"id":"snake","title":"Neon Snake","genre":"ARCADE","desc":"Collect glowing stars and grow your snake.","color":Color("#58edc4")}
+    {"id":"snake","title":"Neon Snake","genre":"ARCADE","desc":"Collect glowing stars and grow your snake.","color":Color("#58edc4")},
+    {"id":"dots","title":"Connect the Dots","genre":"PUZZLE","desc":"Draw glowing paths between matching colors.","color":Color("#ff79b2")}
 ]
 
 var content: VBoxContainer
@@ -348,6 +350,7 @@ func launch(id: String):
         "whack": _play_whack()
         "sort": _play_sort()
         "snake": _play_snake()
+        "dots": _play_dots()
 
 func _mount_game(g: Control):
     _shell()
@@ -404,6 +407,12 @@ func _play_snake():
     # Snake needs a wider touch arena than the standard game cards.
     content.add_theme_constant_override("margin_left", 2)
     content.add_theme_constant_override("margin_right", 2)
+    g.start_game()
+
+func _play_dots():
+    var g := ConnectDots.new()
+    g.finished.connect(_finished)
+    _mount_game(g)
     g.start_game()
 
 func _daily_challenge():

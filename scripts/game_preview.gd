@@ -47,6 +47,13 @@ func _draw() -> void:
             var font := ThemeDB.fallback_font
             if font:
                 draw_string(font, pos + Vector2(cell * 0.18, cell * 0.68), values[i], HORIZONTAL_ALIGNMENT_LEFT, -1, maxi(10, int(cell * 0.45)), Color("#17172b"))
+    elif game_id == "dots":
+        var points: Array[Vector2] = [Vector2(w * 0.22, h * 0.24), Vector2(w * 0.78, h * 0.24), Vector2(w * 0.22, h * 0.72), Vector2(w * 0.78, h * 0.72)]
+        draw_line(points[0], points[1], Color("#ff79b2"), 11.0, true)
+        draw_line(points[2], points[3], Color("#5fe0ff"), 11.0, true)
+        for i in range(points.size()):
+            draw_circle(points[i], 13.0, Color("#ff79b2") if i < 2 else Color("#5fe0ff"))
+            draw_circle(points[i] + Vector2(-3, -3), 4.0, Color.WHITE)
     elif game_id == "snake":
         var cell: float = minf(w, h) * 0.18
         var origin := center - Vector2(cell * 1.5, cell * 0.5)
