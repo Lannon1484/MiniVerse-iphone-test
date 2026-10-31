@@ -118,7 +118,6 @@ func _shell():
     scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
     # Global finger-drag handling prevents buttons and cards blocking swipes.
     scroll.scroll_deadzone = 0
-    scroll.touch_scroll_enabled = false
     lobby_scroll = scroll
     root.add_child(scroll)
     content = VBoxContainer.new()
