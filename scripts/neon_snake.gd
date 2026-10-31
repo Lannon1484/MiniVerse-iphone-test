@@ -67,11 +67,11 @@ func _build_ui() -> void:
     root.add_child(controls)
     # Familiar D-pad arrangement: up above left/down/right.
     _add_spacer(controls)
-    _add_control(controls, "▲", Vector2i.UP)
+    _add_control(controls, Vector2i.UP)
     _add_spacer(controls)
-    _add_control(controls, "◀", Vector2i.LEFT)
-    _add_control(controls, "▼", Vector2i.DOWN)
-    _add_control(controls, "▶", Vector2i.RIGHT)
+    _add_control(controls, Vector2i.LEFT)
+    _add_control(controls, Vector2i.DOWN)
+    _add_control(controls, Vector2i.RIGHT)
     var restart := Button.new()
     restart.text = "↻  NEW RUN"
     restart.custom_minimum_size.y = 46
@@ -80,17 +80,55 @@ func _build_ui() -> void:
 
 func _add_spacer(parent: GridContainer) -> void:
     var spacer := Control.new()
-    spacer.custom_minimum_size = Vector2(0, 52)
+    spacer.custom_minimum_size = Vector2(0, 88)
     spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     parent.add_child(spacer)
 
-func _add_control(parent: GridContainer, label_text: String, heading: Vector2i) -> void:
+func _add_control(parent: GridContainer, heading: Vector2i) -> void:
     var b := Button.new()
-    b.text = label_text
-    b.custom_minimum_size = Vector2(0, 52)
+    # Draw arrows as vector geometry rather than font glyphs. This avoids
+    # missing-character squares and makes them clear on iPhone Safari.
+    b.custom_minimum_size = Vector2(0, 88)
     b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    b.focus_mode = Control.FOCUS_NONE
+    var normal := StyleBoxFlat.new()
+    normal.bg_color = Color("#263b73")
+    normal.border_color = Color("#67e8f9")
+    normal.set_border_width_all(3)
+    normal.set_corner_radius_all(19)
+    b.add_theme_stylebox_override("normal", normal)
+    var hover := normal.duplicate()
+    hover.bg_color = Color("#345294")
+    b.add_theme_stylebox_override("hover", hover)
+    var pressed := normal.duplicate()
+    pressed.bg_color = Color("#167c9b")
+    b.add_theme_stylebox_override("pressed", pressed)
     b.pressed.connect(_steer.bind(heading))
     parent.add_child(b)
+    var arrow := DirectionArrow.new()
+    arrow.heading = heading
+    arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    arrow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    b.add_child(arrow)
+
+class DirectionArrow extends Control:
+    var heading: Vector2i = Vector2i.UP
+
+    func _draw() -> void:
+        var center: Vector2 = size * 0.5
+        var axis: Vector2 = Vector2(heading)
+        var side: Vector2 = Vector2(-axis.y, axis.x)
+        var length: float = minf(size.x, size.y) * 0.30
+        var width: float = length * 0.77
+        var tip: Vector2 = center + axis * length
+        var back: Vector2 = center - axis * length * 0.72
+        var points := PackedVector2Array([
+            tip,
+            back + side * width,
+            back - side * width
+        ])
+        draw_colored_polygon(points, Color("#f1fdff"))
+        draw_circle(center - axis * length * 0.14, 3.5, Color("#a6faff"))
 
 func _restart() -> void:
     snake.clear()
