@@ -100,6 +100,13 @@ var mission_day := ""
 var mission_progress: Dictionary = {}
 var mission_claimed: Dictionary = {}
 var mission_notice := ""
+# Weekly objectives reset every Monday (device local time). Their progress is
+# stored independently of the daily missions and existing player statistics.
+var weekly_key := ""
+var weekly_progress: Dictionary = {}
+var weekly_claimed: Dictionary = {}
+var weekly_games: Dictionary = {}
+var weekly_notice := ""
 
 const MISSION_GAMES := ["fast", "merge", "stack", "memory", "whack", "sort", "snake", "dots", "hopper", "rhythm"]
 
@@ -160,6 +167,7 @@ func _rewards_hub() -> void:
     current_tab = "rewards"
     _shell()
     _heading("Rewards & Challenges", "Your daily rewards, achievements and events.")
+    content.add_child(_menu_button("WEEKLY CHALLENGES", weekly_challenges, Color("#34d399"), "missions"))
     content.add_child(_menu_button("DAILY MISSIONS & LOGIN REWARDS", daily_missions, Color("#fbbf24"), "missions"))
     content.add_child(_menu_button("ACHIEVEMENTS", achievements, Color("#344a9b"), "achievements"))
     content.add_child(_menu_button("CHALLENGES & EVENTS", events, Color("#344a9b"), "events"))
@@ -191,9 +199,10 @@ func _bottom_navigation(root: VBoxContainer) -> void:
         button.expand_icon = true
         button.add_theme_constant_override("icon_max_width", 30)
         button.add_theme_font_size_override("font_size", 20)
-        button.add_theme_color_override("font_color", Color("#ffffff") if selected else Color("#e4e9ff"))
-        button.add_theme_color_override("font_hover_color", Color("#ffffff"))
-        button.add_theme_color_override("font_pressed_color", Color("#ffffff"))
+        var nav_bg: Color = _theme_color().darkened(0.32) if selected else PANEL2
+        button.add_theme_color_override("font_color", _button_text_color(nav_bg))
+        button.add_theme_color_override("font_hover_color", _button_text_color(_theme_color().darkened(0.18)))
+        button.add_theme_color_override("font_pressed_color", _button_text_color(_theme_color().darkened(0.42)))
         button.add_theme_stylebox_override("normal", _style(_theme_color().darkened(0.32) if selected else PANEL2, 10))
         button.add_theme_stylebox_override("hover", _style(_theme_color().darkened(0.18), 10))
         button.add_theme_stylebox_override("pressed", _style(_theme_color().darkened(0.42), 10))
@@ -337,16 +346,34 @@ func _lobby_button_style(color: Color) -> StyleBoxFlat:
     return style
 
 func _lobby_card_style(accent: Color) -> StyleBoxFlat:
-    var style := _style(Color("#172858").lerp(_theme_color(), 0.19), 20)
-    style.border_width_left = 2
-    style.border_width_right = 2
-    style.border_width_top = 2
+    var style := _style(Color("#172858").lerp(_theme_color(), 0.19), 18)
+    style.content_margin_left = 16
+    style.content_margin_right = 16
+    style.content_margin_top = 15
+    style.content_margin_bottom = 15
+    style.border_width_left = 3
+    style.border_width_right = 1
+    style.border_width_top = 1
     style.border_width_bottom = 2
-    style.border_color = accent.darkened(0.12)
-    style.shadow_color = Color("#030a26", 0.6)
-    style.shadow_size = 5
-    style.shadow_offset = Vector2(0, 4)
+    style.border_color = accent.darkened(0.22)
+    style.shadow_color = Color("#030a26", 0.38)
+    style.shadow_size = 3
+    style.shadow_offset = Vector2(0, 3)
     return style
+
+
+func _menu_accent_text(accent: Color) -> Color:
+    # On dark panels, lift darker theme colors so headings stay readable.
+    var contrast: float = 0.2126 * accent.r + 0.7152 * accent.g + 0.0722 * accent.b
+    return accent.lightened(0.45) if contrast < 0.55 else accent
+
+
+func _button_text_color(background: Color) -> Color:
+    # Choose text based on the *rendered* button background, including
+    # purchased themes. Light buttons get dark text, dark buttons get white.
+    var luminance: float = 0.2126 * background.r + 0.7152 * background.g + 0.0722 * background.b
+    return Color("#101827") if luminance > 0.49 else Color("#ffffff")
+
 
 func _button(text: String, cb: Callable, color := ACCENT, height := 56) -> Button:
     var b := Button.new()
@@ -359,7 +386,12 @@ func _button(text: String, cb: Callable, color := ACCENT, height := 56) -> Butto
     b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     b.add_theme_font_size_override("font_size", 21)
     var button_color: Color = _theme_button_color(color)
-    b.add_theme_color_override("font_color", Color("#17172b") if color == ACCENT or color == Color("#fbbf24") else TEXT)
+    var normal_text := _button_text_color(button_color)
+    b.add_theme_color_override("font_color", normal_text)
+    b.add_theme_color_override("font_hover_color", _button_text_color(button_color.lightened(0.12)))
+    b.add_theme_color_override("font_pressed_color", _button_text_color(button_color.darkened(0.12)))
+    b.add_theme_color_override("font_focus_color", normal_text)
+    b.add_theme_color_override("font_disabled_color", normal_text.darkened(0.25) if normal_text.r > 0.5 else normal_text.lightened(0.25))
     b.add_theme_stylebox_override("normal", _lobby_button_style(button_color))
     b.add_theme_stylebox_override("hover", _lobby_button_style(button_color.lightened(0.12)))
     b.add_theme_stylebox_override("pressed", _lobby_button_style(button_color.darkened(0.12)))
@@ -505,11 +537,13 @@ func shop() -> void:
             var title := Label.new()
             title.text = str(item["name"]) + ("  -  EQUIPPED" if equipped else "")
             title.add_theme_color_override("font_color", TEXT)
-            title.add_theme_font_size_override("font_size", 19)
+            title.add_theme_font_size_override("font_size", 21)
             column.add_child(title)
             var description := Label.new()
             description.text = str(item["description"]) + ("  •  Owned" if owned else "  •  %d coins" % price)
-            description.add_theme_color_override("font_color", MUTED)
+            description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+            description.add_theme_font_size_override("font_size", 19)
+            description.add_theme_color_override("font_color", Color("#e4eaff"))
             column.add_child(description)
             var button_label := "EQUIPPED" if equipped else ("EQUIP" if owned else "BUY FOR %d COINS" % price)
             var purchase := _button(button_label, func(): _shop_purchase(id), theme_color)
@@ -534,6 +568,8 @@ func shop() -> void:
             avatar_row.add_child(avatar_column)
             var avatar_title := Label.new()
             avatar_title.text = str(item["name"]) + ("  -  EQUIPPED" if avatar_equipped else "")
+            avatar_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+            avatar_title.add_theme_font_size_override("font_size", 21)
             avatar_title.add_theme_color_override("font_color", TEXT)
             avatar_column.add_child(avatar_title)
             var avatar_button := _button("EQUIPPED" if avatar_equipped else ("EQUIP" if avatar_owned else "BUY FOR %d COINS" % avatar_price), func(): _avatar_purchase(avatar_id), Color(str(item["color"])), 52)
@@ -554,12 +590,14 @@ func shop() -> void:
             effect_card.add_child(effect_column)
             var effect_title := Label.new()
             effect_title.text = str(item["name"]) + ("  -  EQUIPPED" if effect_equipped else "")
-            effect_title.add_theme_color_override("font_color", Color(str(item["color"])))
-            effect_title.add_theme_font_size_override("font_size", 19)
+            effect_title.add_theme_color_override("font_color", _menu_accent_text(Color(str(item["color"]))))
+            effect_title.add_theme_font_size_override("font_size", 22)
             effect_column.add_child(effect_title)
             var effect_description := Label.new()
             effect_description.text = str(item["description"])
-            effect_description.add_theme_color_override("font_color", MUTED)
+            effect_description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+            effect_description.add_theme_font_size_override("font_size", 19)
+            effect_description.add_theme_color_override("font_color", Color("#e4eaff"))
             effect_column.add_child(effect_description)
             var effect_button := _button("EQUIPPED" if effect_equipped else ("EQUIP" if effect_owned else "BUY FOR %d COINS" % effect_price), func(): _effect_purchase(effect_id), Color(str(item["color"])), 52)
             effect_button.disabled = effect_equipped
@@ -573,7 +611,7 @@ func _heading(title: String, subtitle := ""):
     var t := Label.new()
     t.text = title
     t.add_theme_font_size_override("font_size", 30)
-    t.add_theme_color_override("font_color", _theme_color())
+    t.add_theme_color_override("font_color", _menu_accent_text(_theme_color()))
     box.add_child(t)
     if subtitle != "":
         var s := Label.new()
@@ -585,23 +623,25 @@ func _heading(title: String, subtitle := ""):
 
 func _card(title: String, body: String) -> PanelContainer:
     var p := PanelContainer.new()
-    p.add_theme_stylebox_override("panel", _style(PANEL.lerp(_theme_color(), 0.15), 18))
+    p.add_theme_stylebox_override("panel", _lobby_card_style(_theme_color()))
     content.add_child(p)
     var v := VBoxContainer.new()
-    v.add_theme_constant_override("separation", 6)
+    v.add_theme_constant_override("separation", 9)
     p.add_child(v)
     var t := Label.new()
     t.text = title
+    t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     t.add_theme_font_size_override("font_size", 22)
-    t.add_theme_color_override("font_color", TEXT)
+    t.add_theme_color_override("font_color", _menu_accent_text(_theme_color()))
     v.add_child(t)
     var d := Label.new()
     d.text = body
     d.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     d.add_theme_font_size_override("font_size", 19)
-    d.add_theme_color_override("font_color", MUTED)
+    d.add_theme_color_override("font_color", Color("#e4eaff"))
     v.add_child(d)
     return p
+
 
 func _stat_rate(wins: int, played: int) -> String:
     if played <= 0:
@@ -640,7 +680,7 @@ func _profile_progress(label_text: String, current: int, target: int, accent: Co
     var caption := Label.new()
     caption.text = "%s  (%d / %d)" % [label_text, mini(current, target), target]
     caption.add_theme_color_override("font_color", TEXT)
-    caption.add_theme_font_size_override("font_size", 14)
+    caption.add_theme_font_size_override("font_size", 18)
     wrapper.add_child(caption)
     var bar := ProgressBar.new()
     bar.min_value = 0.0
@@ -740,7 +780,7 @@ func player_profile() -> void:
     if not _title_unlocked(equipped_title):
         equipped_title = "explorer"
     profile_title.text = _title_display_name(equipped_title).to_upper()
-    profile_title.add_theme_color_override("font_color", _theme_color().lightened(0.5))
+    profile_title.add_theme_color_override("font_color", _menu_accent_text(_theme_color()))
     profile_title.add_theme_font_size_override("font_size", 19)
     profile_details.add_child(profile_title)
     var profile_level := Label.new()
@@ -751,15 +791,11 @@ func player_profile() -> void:
     profile_wallet.text = "%d coins available" % coins
     profile_wallet.add_theme_color_override("font_color", MUTED)
     profile_details.add_child(profile_wallet)
-    _card("OVERALL PERFORMANCE", "Rounds played: %d\nLevels cleared: %d\nWin rate: %s\nFavorite game: %s" % [total_games_played, total_wins, _stat_rate(total_wins, total_games_played), _profile_favorite()])
-    var unlocked_achievements := 0
-    for achievement_id in achievement_claimed.keys():
-        if bool(achievement_claimed[achievement_id]):
-            unlocked_achievements += 1
-    var total_stars := 0
-    for game in GAMES:
-        total_stars += int(best_stars.get(str(game["id"]), 0))
-    _card("COLLECTION & REWARDS", "Achievements: %d / %d\nBest stars earned: %d / 30\nThemes owned: %d / %d\nAvatars owned: %d / %d\nVictory effects owned: %d / %d\nDaily login claims: %d" % [unlocked_achievements, ACHIEVEMENT_INFO.size(), total_stars, owned_themes.size(), SHOP_THEMES.size(), owned_avatars.size(), SHOP_AVATARS.size(), owned_effects.size(), SHOP_EFFECTS.size(), login_total_claims])
+    var total_stars: int = _profile_total_stars()
+    var unlocked_achievements: int = _profile_achievement_count()
+    if profile_section == "overview":
+        _card("OVERALL PERFORMANCE", "Rounds played: %d\nLevels cleared: %d\nWin rate: %s\nFavorite game: %s" % [total_games_played, total_wins, _stat_rate(total_wins, total_games_played), _profile_favorite()])
+        _card("COLLECTION & REWARDS", "Achievements: %d / %d\nBest stars earned: %d / 30\nThemes owned: %d / %d\nAvatars owned: %d / %d\nVictory effects owned: %d / %d\nDaily login claims: %d" % [unlocked_achievements, ACHIEVEMENT_INFO.size(), total_stars, owned_themes.size(), SHOP_THEMES.size(), owned_avatars.size(), SHOP_AVATARS.size(), owned_effects.size(), SHOP_EFFECTS.size(), login_total_claims])
     _section_chips(["Overview", "Titles", "Milestones", "Games"], profile_section.capitalize(), func(value: String):
         profile_section = value.to_lower()
         player_profile()
@@ -851,7 +887,7 @@ func home():
     profile.add_child(_avatar_image(equipped_avatar, 62))
     var profile_label := Label.new()
     profile_label.text = "YOUR AVATAR  •  Level %d" % level
-    profile_label.add_theme_color_override("font_color", _theme_color().lightened(0.45))
+    profile_label.add_theme_color_override("font_color", _menu_accent_text(_theme_color()))
     profile.add_child(profile_label)
     content.add_child(_menu_button("PLAY A RANDOM GAME", _random_game, Color("#36e58a"), "play", 60))
     var quick_actions := HBoxContainer.new()
@@ -873,67 +909,63 @@ func home():
 
 func _game_card(g: Dictionary) -> PanelContainer:
     var card := PanelContainer.new()
-    card.custom_minimum_size.y = 126
     card.add_theme_stylebox_override("panel", _lobby_card_style(g.color))
-    var row := HBoxContainer.new()
-    row.add_theme_constant_override("separation", 12)
-    card.add_child(row)
+    var column := VBoxContainer.new()
+    column.add_theme_constant_override("separation", 12)
+    card.add_child(column)
 
+    var top := HBoxContainer.new()
+    top.add_theme_constant_override("separation", 14)
+    column.add_child(top)
     var preview := GamePreview.new()
     preview.game_id = g.id
     preview.accent = g.color
-    preview.custom_minimum_size = Vector2(94, 98)
+    preview.custom_minimum_size = Vector2(90, 100)
     preview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-    row.add_child(preview)
+    top.add_child(preview)
 
-    var detail := VBoxContainer.new()
-    detail.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    detail.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-    detail.add_theme_constant_override("separation", 3)
-    row.add_child(detail)
+    var details := VBoxContainer.new()
+    details.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    details.add_theme_constant_override("separation", 5)
+    top.add_child(details)
     var name := Label.new()
-    name.text = g.title
-    name.add_theme_font_size_override("font_size", 17)
+    name.text = str(g.title)
+    name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    name.add_theme_font_size_override("font_size", 23)
     name.add_theme_color_override("font_color", TEXT)
-    detail.add_child(name)
+    details.add_child(name)
     var genre := Label.new()
-    genre.text = g.genre
-    genre.add_theme_font_size_override("font_size", 10)
-    genre.add_theme_color_override("font_color", g.color)
-    detail.add_child(genre)
-    var progress_row := HBoxContainer.new()
-    progress_row.add_theme_constant_override("separation", 3)
-    detail.add_child(progress_row)
-    var progress := Label.new()
-    progress.text = "LEVEL %d   BEST" % Difficulty.level(str(g.id))
-    progress.add_theme_font_size_override("font_size", 11)
-    progress.add_theme_color_override("font_color", Color("#ffe29e"))
-    progress_row.add_child(progress)
+    genre.text = str(g.genre)
+    genre.add_theme_font_size_override("font_size", 17)
+    genre.add_theme_color_override("font_color", _menu_accent_text(g.color))
+    details.add_child(genre)
+    var level_info := Label.new()
+    level_info.text = "LEVEL %d  |  BEST %d" % [Difficulty.level(str(g.id)), int(best_scores.get(g.id, 0))]
+    level_info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    level_info.add_theme_font_size_override("font_size", 17)
+    level_info.add_theme_color_override("font_color", Color("#ffe29e"))
+    details.add_child(level_info)
+    var stars := HBoxContainer.new()
+    stars.add_theme_constant_override("separation", 5)
+    details.add_child(stars)
     for star_index in range(3):
         var star_icon := TextureRect.new()
         star_icon.texture = preload("res://assets/ui/star_filled.png") if star_index < int(best_stars.get(str(g.id), 0)) else preload("res://assets/ui/star_empty.png")
-        star_icon.custom_minimum_size = Vector2(13, 13)
+        star_icon.custom_minimum_size = Vector2(22, 22)
         star_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
         star_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-        progress_row.add_child(star_icon)
-    var desc := Label.new()
-    desc.text = g.desc
-    desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    desc.add_theme_font_size_override("font_size", 11)
-    desc.add_theme_color_override("font_color", MUTED)
-    detail.add_child(desc)
-    var best := Label.new()
-    best.text = "BEST  %d" % int(best_scores.get(g.id, 0))
-    best.add_theme_font_size_override("font_size", 10)
-    best.add_theme_color_override("font_color", Color("#fcd34d"))
-    detail.add_child(best)
+        stars.add_child(star_icon)
 
-    var play := _button("PLAY", func(): launch(g.id), g.color, 44)
-    play.custom_minimum_size.x = 74
-    play.size_flags_horizontal = Control.SIZE_SHRINK_END
-    play.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-    row.add_child(play)
+    var description := Label.new()
+    description.text = str(g.desc)
+    description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    description.add_theme_font_size_override("font_size", 18)
+    description.add_theme_color_override("font_color", Color("#e4eaff"))
+    column.add_child(description)
+    var play := _button("PLAY " + str(g.title).to_upper(), func(): launch(str(g.id)), g.color, 60)
+    column.add_child(play)
     return card
+
 
 func library():
     current_tab = "games"
@@ -949,7 +981,7 @@ func library():
             library()
         , Color("#a78bfa") if library_filter == category else Color("#344a76"), 44)
         chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-        chip.add_theme_font_size_override("font_size", 13)
+        chip.add_theme_font_size_override("font_size", 19)
         filters.add_child(chip)
     var count := 0
     for g in GAMES:
@@ -1047,11 +1079,20 @@ func achievements() -> void:
         var badge_card := _card(heading, details)
         var badge_icon := TextureRect.new()
         badge_icon.texture = preload("res://assets/ui/achievement_badge.png")
-        badge_icon.custom_minimum_size = Vector2(42, 42)
+        badge_icon.custom_minimum_size = Vector2(48, 48)
         badge_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
         badge_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
         badge_icon.modulate = Color.WHITE if unlocked else Color(0.4, 0.46, 0.6, 0.55)
-        badge_card.get_child(0).add_child(badge_icon)
+        var badge_body := badge_card.get_child(0)
+        var badge_header := HBoxContainer.new()
+        badge_header.add_theme_constant_override("separation", 10)
+        badge_body.add_child(badge_header)
+        badge_body.move_child(badge_header, 0)
+        var badge_title := badge_body.get_child(1)
+        badge_body.remove_child(badge_title)
+        badge_header.add_child(badge_icon)
+        badge_header.add_child(badge_title)
+        badge_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "home"))
 
 func settings():
@@ -1216,7 +1257,7 @@ func _show_tutorial(id: String) -> void:
     var heading := Label.new()
     heading.text = "HOW TO PLAY"
     heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    heading.add_theme_font_size_override("font_size", 18)
+    heading.add_theme_font_size_override("font_size", 23)
     heading.add_theme_color_override("font_color", CYAN)
     body.add_child(heading)
     var name_label := Label.new()
@@ -1683,6 +1724,91 @@ func _login_calendar() -> void:
         _card("COME BACK TOMORROW", "Today's login reward has already been claimed.")
 
 
+func _weekly_period_key() -> String:
+    # ISO-style Monday week boundary using the local device calendar.
+    var today: Dictionary = Time.get_date_dict_from_system()
+    var weekday: int = int(today.get("weekday", 1))
+    # Godot: Sunday=0, Monday=1, ..., Saturday=6.
+    var days_since_monday: int = (weekday + 6) % 7
+    var now: float = Time.get_unix_time_from_system()
+    var date_text: String = Time.get_date_string_from_unix_time(now - float(days_since_monday) * 86400.0)
+    return date_text
+
+
+func _weekly_reset_if_needed() -> void:
+    var period: String = _weekly_period_key()
+    if weekly_key != period:
+        weekly_key = period
+        weekly_progress = {}
+        weekly_claimed = {}
+        weekly_games = {}
+        weekly_notice = ""
+
+
+func _weekly_definitions() -> Array[Dictionary]:
+    return [
+        {"id":"rounds", "title":"Arcade Explorer", "detail":"Finish 15 mini-game rounds this week.", "target":15, "coins":180, "xp":200},
+        {"id":"wins", "title":"Victory Marathon", "detail":"Successfully clear 8 levels this week.", "target":8, "coins":240, "xp":250},
+        {"id":"variety", "title":"World Tour", "detail":"Finish a round in 5 different mini-games.", "target":5, "coins":300, "xp":300}
+    ]
+
+
+func _weekly_record(id: String, passed: bool) -> void:
+    _weekly_reset_if_needed()
+    if not weekly_claimed.has("rounds"):
+        weekly_progress["rounds"] = mini(int(weekly_progress.get("rounds", 0)) + 1, 15)
+    if passed and not weekly_claimed.has("wins"):
+        weekly_progress["wins"] = mini(int(weekly_progress.get("wins", 0)) + 1, 8)
+    if not weekly_claimed.has("variety"):
+        weekly_games[id] = true
+        weekly_progress["variety"] = mini(weekly_games.size(), 5)
+
+
+func _weekly_claim(key: String) -> void:
+    _weekly_reset_if_needed()
+    for challenge in _weekly_definitions():
+        if str(challenge["id"]) != key or weekly_claimed.has(key):
+            continue
+        if int(weekly_progress.get(key, 0)) < int(challenge["target"]):
+            return
+        weekly_claimed[key] = true
+        coins += int(challenge["coins"])
+        xp += int(challenge["xp"])
+        level = int(xp / 100) + 1
+        weekly_notice = "Claimed %s: +%d coins and +%d XP!" % [str(challenge["title"]), int(challenge["coins"]), int(challenge["xp"])]
+        _play_sound(SFX_COLLECT)
+        _save()
+        weekly_challenges()
+        return
+
+
+func weekly_challenges() -> void:
+    _weekly_reset_if_needed()
+    current_tab = "rewards"
+    _shell()
+    _heading("Weekly Challenges", "Three bigger goals to complete before the next Monday.")
+    _card("THIS WEEK", "Started Monday %s. Progress resets next Monday (device local time)." % weekly_key)
+    if weekly_notice != "":
+        _card("REWARD CLAIMED", weekly_notice)
+    for challenge in _weekly_definitions():
+        var key: String = str(challenge["id"])
+        var target: int = int(challenge["target"])
+        var progress: int = mini(int(weekly_progress.get(key, 0)), target)
+        var claimed: bool = weekly_claimed.has(key)
+        var status: String = "CLAIMED" if claimed else ("READY TO CLAIM" if progress >= target else "%d / %d" % [progress, target])
+        _card(str(challenge["title"]), "%s\nProgress: %s\nReward: %d coins + %d XP" % [str(challenge["detail"]), status, int(challenge["coins"]), int(challenge["xp"])])
+        var bar := ProgressBar.new()
+        bar.custom_minimum_size.y = 16
+        bar.max_value = target
+        bar.value = progress
+        bar.show_percentage = false
+        content.add_child(bar)
+        if not claimed and progress >= target:
+            var claim_key: String = key
+            content.add_child(_button("CLAIM WEEKLY REWARD", func(): _weekly_claim(claim_key), Color("#34d399"), 60))
+    content.add_child(_menu_button("BACK TO REWARDS", _rewards_hub, PANEL2, "back"))
+
+
 func _mission_today() -> String:
     return Time.get_date_string_from_system()
 
@@ -1813,6 +1939,7 @@ func _finished(id: String, score: int, extra: Dictionary = {}):
         game_win_counts[id] = int(game_win_counts.get(id, 0)) + 1
     _award_achievements()
     _mission_record(id, passed)
+    _weekly_record(id, passed)
     _save()
     _play_sound(SFX_WIN if passed else SFX_OOPS)
     _results(id, score, reward, record, earned_xp, stars_earned, played_level, goal, passed)
@@ -1960,7 +2087,7 @@ func _game_name(id: String) -> String:
 func _save():
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games}))
         f.close()
 
 func _load_save():
@@ -1974,6 +2101,11 @@ func _load_save():
         login_streak = int(data.get("login_streak", 0))
         login_total_claims = int(data.get("login_total_claims", 0))
         equipped_title = str(data.get("equipped_title", "explorer"))
+        weekly_key = str(data.get("weekly_key", ""))
+        weekly_progress = data.get("weekly_progress", {})
+        weekly_claimed = data.get("weekly_claimed", {})
+        weekly_games = data.get("weekly_games", {})
+        _weekly_reset_if_needed()
         mission_day = str(data.get("mission_day", ""))
         mission_progress = data.get("mission_progress", {})
         mission_claimed = data.get("mission_claimed", {})
