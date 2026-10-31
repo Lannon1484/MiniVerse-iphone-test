@@ -61,7 +61,28 @@ var achievement_claimed: Dictionary = {}
 var total_games_played := 0
 var total_wins := 0
 var game_play_counts: Dictionary = {}
+var game_win_counts: Dictionary = {}
 var achievement_new: Array[String] = []
+# Cosmetic purchases are local, permanent and do not change game difficulty.
+var owned_themes: Dictionary = {"classic": true}
+var equipped_theme := "classic"
+var shop_message := ""
+const SHOP_THEMES := [
+    {"id":"classic", "name":"Classic Portal", "price":0, "color":"#a78bfa", "description":"The original MiniVerse purple."},
+    {"id":"sunset", "name":"Sunset Glow", "price":150, "color":"#fb923c", "description":"Warm orange highlights."},
+    {"id":"ocean", "name":"Ocean Breeze", "price":250, "color":"#22d3ee", "description":"Cool turquoise highlights."},
+    {"id":"emerald", "name":"Emerald Magic", "price":350, "color":"#34d399", "description":"Fresh green highlights."},
+    {"id":"rose", "name":"Rose Sparkle", "price":500, "color":"#fb7185", "description":"Bright pink highlights."}
+]
+var owned_avatars: Dictionary = {"star": true}
+var equipped_avatar := "star"
+const SHOP_AVATARS := [
+    {"id":"star","name":"Star Sprite","price":0,"color":"#facc15"},
+    {"id":"fox","name":"Forest Fox","price":180,"color":"#fb923c"},
+    {"id":"cat","name":"Moon Cat","price":260,"color":"#a78bfa"},
+    {"id":"slime","name":"Happy Slime","price":320,"color":"#34d399"},
+    {"id":"robot","name":"Pocket Robot","price":450,"color":"#67e8f9"}
+]
 var tutorial_overlay: Control
 
 const TUTORIALS := {
@@ -102,11 +123,11 @@ func _shell():
         if c != sound_player:
             c.queue_free()
     var bg := ColorRect.new()
-    bg.color = BG
+    bg.color = BG.lerp(_theme_color(), 0.10)
     bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     add_child(bg)
     # Subtle arcade-style corner lights behind the interface.
-    for deco in [{"pos": Vector2(-90, 150), "size": Vector2(250, 250), "color": Color("#8b5cf6", 0.08)}, {"pos": Vector2(500, 540), "size": Vector2(280, 280), "color": Color("#22d3ee", 0.05)}]:
+    for deco in [{"pos": Vector2(-90, 150), "size": Vector2(250, 250), "color": Color(_theme_color(), 0.12)}, {"pos": Vector2(500, 540), "size": Vector2(280, 280), "color": Color("#22d3ee", 0.05)}]:
         var glow := ColorRect.new()
         glow.position = deco.pos
         glow.size = deco.size
@@ -135,10 +156,10 @@ func _shell():
     var logo := Label.new()
     logo.text = "MINIVERSE"
     logo.add_theme_font_size_override("font_size", 30)
-    logo.add_theme_color_override("font_shadow_color", Color("#7c3aed"))
+    logo.add_theme_color_override("font_shadow_color", _theme_color().darkened(0.38))
     logo.add_theme_constant_override("shadow_offset_x", 2)
     logo.add_theme_constant_override("shadow_offset_y", 3)
-    logo.add_theme_color_override("font_color", Color("#ffda78"))
+    logo.add_theme_color_override("font_color", Color("#ffda78").lerp(_theme_color().lightened(0.45), 0.45))
     brand.add_child(logo)
     var subtitle := Label.new()
     subtitle.text = "A UNIVERSE OF QUICK FUN"
@@ -161,7 +182,7 @@ func _shell():
     wallet.add_theme_color_override("font_color", Color("#fcd34d"))
     wallet_group.add_child(wallet)
     var line := ColorRect.new()
-    line.color = Color("#2a2f52")
+    line.color = _theme_color().darkened(0.38)
     line.custom_minimum_size.y = 2
     root.add_child(line)
     var scroll := ScrollContainer.new()
@@ -208,7 +229,7 @@ func _lobby_button_style(color: Color) -> StyleBoxFlat:
     return style
 
 func _lobby_card_style(accent: Color) -> StyleBoxFlat:
-    var style := _style(Color("#172858"), 20)
+    var style := _style(Color("#172858").lerp(_theme_color(), 0.19), 20)
     style.border_width_left = 2
     style.border_width_right = 2
     style.border_width_top = 2
@@ -229,11 +250,12 @@ func _button(text: String, cb: Callable, color := ACCENT, height := 56) -> Butto
     b.custom_minimum_size.y = maxi(height, 52)
     b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     b.add_theme_font_size_override("font_size", 17)
+    var button_color: Color = _theme_button_color(color)
     b.add_theme_color_override("font_color", Color("#17172b") if color == ACCENT or color == Color("#fbbf24") else TEXT)
-    b.add_theme_stylebox_override("normal", _lobby_button_style(color))
-    b.add_theme_stylebox_override("hover", _lobby_button_style(color.lightened(0.12)))
-    b.add_theme_stylebox_override("pressed", _lobby_button_style(color.darkened(0.12)))
-    b.add_theme_stylebox_override("focus", _style(color.lightened(0.18)))
+    b.add_theme_stylebox_override("normal", _lobby_button_style(button_color))
+    b.add_theme_stylebox_override("hover", _lobby_button_style(button_color.lightened(0.12)))
+    b.add_theme_stylebox_override("pressed", _lobby_button_style(button_color.darkened(0.12)))
+    b.add_theme_stylebox_override("focus", _style(button_color.lightened(0.18)))
     b.add_theme_constant_override("outline_size", 0)
     b.pressed.connect(func():
         _play_sound(SFX_TAP)
@@ -255,6 +277,134 @@ func _play_sound(stream: AudioStream) -> void:
         sound_player.stream = stream
         sound_player.play()
 
+func _theme_color() -> Color:
+    for item in SHOP_THEMES:
+        if str(item["id"]) == equipped_theme:
+            return Color(str(item["color"]))
+    return ACCENT
+
+func _theme_button_color(base: Color) -> Color:
+    # Recolor standard navigation and secondary buttons while keeping
+    # gameplay-specific bright colors (green play, gold daily, etc.) intact.
+    if base == Color("#344a9b") or base == PANEL2 or base == Color("#344a76"):
+        return base.lerp(_theme_color(), 0.55)
+    if base == ACCENT:
+        return _theme_color()
+    return base
+
+
+func _shop_purchase(theme_id: String) -> void:
+    for item in SHOP_THEMES:
+        if str(item["id"]) != theme_id:
+            continue
+        var cost: int = int(item["price"])
+        if owned_themes.has(theme_id):
+            equipped_theme = theme_id
+            shop_message = "Equipped %s!" % str(item["name"])
+        elif coins >= cost:
+            coins -= cost
+            owned_themes[theme_id] = true
+            equipped_theme = theme_id
+            shop_message = "Unlocked and equipped %s!" % str(item["name"])
+            _play_sound(SFX_COLLECT)
+        else:
+            shop_message = "You need %d more coins to unlock %s." % [cost - coins, str(item["name"])]
+        _save()
+        shop()
+        return
+
+func _avatar_purchase(avatar_id: String) -> void:
+    for item in SHOP_AVATARS:
+        if str(item["id"]) != avatar_id:
+            continue
+        var cost: int = int(item["price"])
+        if owned_avatars.has(avatar_id):
+            equipped_avatar = avatar_id
+            shop_message = "Equipped %s!" % str(item["name"])
+        elif coins >= cost:
+            coins -= cost
+            owned_avatars[avatar_id] = true
+            equipped_avatar = avatar_id
+            shop_message = "Unlocked and equipped %s!" % str(item["name"])
+            _play_sound(SFX_COLLECT)
+        else:
+            shop_message = "You need %d more coins for %s." % [cost - coins, str(item["name"])]
+        _save()
+        shop()
+        return
+
+
+func _avatar_image(avatar_id: String, dimension: int = 64) -> TextureRect:
+    var picture := TextureRect.new()
+    picture.texture = load("res://assets/ui/avatar_%s.png" % avatar_id)
+    picture.custom_minimum_size = Vector2(dimension, dimension)
+    picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    return picture
+
+
+func shop() -> void:
+    _shell()
+    _heading("Cosmetic Shop", "Customize your theme and avatar with earned coins. No gameplay advantages.")
+    _card("YOUR WALLET", "%d coins available  •  Purchases save automatically." % coins)
+    if shop_message != "":
+        _card("SHOP UPDATE", shop_message)
+    for item in SHOP_THEMES:
+        var id: String = str(item["id"])
+        var price: int = int(item["price"])
+        var owned: bool = owned_themes.has(id)
+        var equipped: bool = equipped_theme == id
+        var theme_color := Color(str(item["color"]))
+        var card := PanelContainer.new()
+        card.add_theme_stylebox_override("panel", _lobby_card_style(theme_color))
+        content.add_child(card)
+        var column := VBoxContainer.new()
+        column.add_theme_constant_override("separation", 7)
+        card.add_child(column)
+        var preview := ColorRect.new()
+        preview.color = theme_color
+        preview.custom_minimum_size.y = 14
+        preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        column.add_child(preview)
+        var title := Label.new()
+        title.text = str(item["name"]) + ("  -  EQUIPPED" if equipped else "")
+        title.add_theme_color_override("font_color", TEXT)
+        title.add_theme_font_size_override("font_size", 19)
+        column.add_child(title)
+        var description := Label.new()
+        description.text = str(item["description"]) + ("  •  Owned" if owned else "  •  %d coins" % price)
+        description.add_theme_color_override("font_color", MUTED)
+        column.add_child(description)
+        var button_label := "EQUIPPED" if equipped else ("EQUIP" if owned else "BUY FOR %d COINS" % price)
+        var purchase := _button(button_label, func(): _shop_purchase(id), theme_color)
+        purchase.disabled = equipped
+        column.add_child(purchase)
+    _heading("Collectible Avatars", "Unlock a character to display beside your lobby progress.")
+    for item in SHOP_AVATARS:
+        var avatar_id: String = str(item["id"])
+        var avatar_price: int = int(item["price"])
+        var avatar_owned: bool = owned_avatars.has(avatar_id)
+        var avatar_equipped: bool = equipped_avatar == avatar_id
+        var avatar_card := PanelContainer.new()
+        avatar_card.add_theme_stylebox_override("panel", _lobby_card_style(Color(str(item["color"]))))
+        content.add_child(avatar_card)
+        var avatar_row := HBoxContainer.new()
+        avatar_row.add_theme_constant_override("separation", 12)
+        avatar_card.add_child(avatar_row)
+        avatar_row.add_child(_avatar_image(avatar_id, 72))
+        var avatar_column := VBoxContainer.new()
+        avatar_column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+        avatar_row.add_child(avatar_column)
+        var avatar_title := Label.new()
+        avatar_title.text = str(item["name"]) + ("  -  EQUIPPED" if avatar_equipped else "")
+        avatar_title.add_theme_color_override("font_color", TEXT)
+        avatar_column.add_child(avatar_title)
+        var avatar_button := _button("EQUIPPED" if avatar_equipped else ("EQUIP" if avatar_owned else "BUY FOR %d COINS" % avatar_price), func(): _avatar_purchase(avatar_id), Color(str(item["color"])), 52)
+        avatar_button.disabled = avatar_equipped
+        avatar_column.add_child(avatar_button)
+    content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "home"))
+
 func _heading(title: String, subtitle := ""):
     var box := VBoxContainer.new()
     box.add_theme_constant_override("separation", 4)
@@ -262,7 +412,7 @@ func _heading(title: String, subtitle := ""):
     var t := Label.new()
     t.text = title
     t.add_theme_font_size_override("font_size", 27)
-    t.add_theme_color_override("font_color", TEXT)
+    t.add_theme_color_override("font_color", _theme_color())
     box.add_child(t)
     if subtitle != "":
         var s := Label.new()
@@ -273,7 +423,7 @@ func _heading(title: String, subtitle := ""):
 
 func _card(title: String, body: String) -> PanelContainer:
     var p := PanelContainer.new()
-    p.add_theme_stylebox_override("panel", _style(PANEL, 18))
+    p.add_theme_stylebox_override("panel", _style(PANEL.lerp(_theme_color(), 0.15), 18))
     content.add_child(p)
     var v := VBoxContainer.new()
     v.add_theme_constant_override("separation", 6)
@@ -296,7 +446,7 @@ func home():
     # Mobile-first welcome panel with custom procedural fantasy artwork.
     var hero := PanelContainer.new()
     var hero_style := StyleBoxFlat.new()
-    hero_style.bg_color = Color("#243a82")
+    hero_style.bg_color = _theme_color().darkened(0.32)
     hero.add_theme_stylebox_override("panel", hero_style)
     content.add_child(hero)
     var hero_box := VBoxContainer.new()
@@ -316,7 +466,7 @@ func home():
     title.text = "SMALL GAMES. BIG FUN."
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     title.add_theme_font_size_override("font_size", 22)
-    title.add_theme_color_override("font_color", Color("#fff2a8"))
+    title.add_theme_color_override("font_color", _theme_color().lightened(0.50))
     welcome.add_child(title)
     var subtitle := Label.new()
     subtitle.text = "Pick a game, beat your best, earn rewards!"
@@ -324,6 +474,15 @@ func home():
     subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     subtitle.add_theme_color_override("font_color", Color("#e1e7ff"))
     welcome.add_child(subtitle)
+    var profile := HBoxContainer.new()
+    profile.alignment = BoxContainer.ALIGNMENT_CENTER
+    profile.add_theme_constant_override("separation", 10)
+    content.add_child(profile)
+    profile.add_child(_avatar_image(equipped_avatar, 62))
+    var profile_label := Label.new()
+    profile_label.text = "YOUR AVATAR  •  Level %d" % level
+    profile_label.add_theme_color_override("font_color", _theme_color().lightened(0.45))
+    profile.add_child(profile_label)
     content.add_child(_menu_button("PLAY A RANDOM GAME", _random_game, Color("#36e58a"), "play", 60))
     content.add_child(_menu_button("PLAY TODAY'S CHALLENGE", _daily_challenge, Color("#fbbf24"), "daily", 54))
     _heading("Recently Played", "Your last three games, ready to jump back into.")
@@ -338,6 +497,7 @@ func home():
     content.add_child(_menu_button("OPEN GAME LIBRARY", library, Color("#344a9b"), "library"))
     content.add_child(_menu_button("CHALLENGES & EVENTS", events, Color("#344a9b"), "events"))
     content.add_child(_menu_button("ACHIEVEMENTS", achievements, Color("#344a9b"), "achievements"))
+    content.add_child(_menu_button("COSMETIC SHOP", shop, Color("#344a9b"), "shop"))
     content.add_child(_menu_button("SETTINGS", settings, Color("#344a9b"), "settings"))
     _card("YOUR PROGRESS", "Level %d  ·  %d XP  ·  %d coins  ·  %d personal records" % [level, xp, coins, best_scores.size()])
 
@@ -459,7 +619,17 @@ const ACHIEVEMENT_INFO := [
     {"id":"five_wins", "title":"Rising Star", "desc":"Win five rounds.", "coins":80, "xp":100},
     {"id":"twenty_wins", "title":"Champion", "desc":"Win twenty rounds.", "coins":200, "xp":250},
     {"id":"explorer", "title":"World Explorer", "desc":"Try all ten mini-games.", "coins":150, "xp":180},
-    {"id":"score_500", "title":"High Scorer", "desc":"Score 500 or more in a single round.", "coins":100, "xp":125}
+    {"id":"score_500", "title":"High Scorer", "desc":"Score 500 or more in a single round.", "coins":100, "xp":125},
+    {"id":"game_fast", "title":"Quick Reflexes", "desc":"Win 3 Fast Fingers rounds.", "coins":75, "xp":90},
+    {"id":"game_merge", "title":"Merge Master", "desc":"Win 3 Number Merge rounds.", "coins":75, "xp":90},
+    {"id":"game_stack", "title":"Tower Builder", "desc":"Win 3 Perfect Stack rounds.", "coins":75, "xp":90},
+    {"id":"game_memory", "title":"Memory Keeper", "desc":"Complete 3 Memory Match boards.", "coins":75, "xp":90},
+    {"id":"game_whack", "title":"Mole Hunter", "desc":"Win 3 Whack-a-Mole rounds.", "coins":75, "xp":90},
+    {"id":"game_sort", "title":"Color Expert", "desc":"Complete 3 Color Sort puzzles.", "coins":75, "xp":90},
+    {"id":"game_snake", "title":"Snake Charmer", "desc":"Win 3 Neon Snake rounds.", "coins":75, "xp":90},
+    {"id":"game_dots", "title":"Pathfinder", "desc":"Complete 3 Connect the Dots puzzles.", "coins":75, "xp":90},
+    {"id":"game_hopper", "title":"Sky Explorer", "desc":"Win 3 Sky Hopper rounds.", "coins":75, "xp":90},
+    {"id":"game_rhythm", "title":"Rhythm Star", "desc":"Win 3 Rhythm Rush songs.", "coins":75, "xp":90}
 ]
 
 func _achievement_unlocked(id: String) -> bool:
@@ -475,6 +645,9 @@ func _achievement_unlocked(id: String) -> bool:
             for value in best_scores.values():
                 if int(value) >= 500:
                     return true
+    if id.begins_with("game_"):
+        var game_key: String = id.trim_prefix("game_")
+        return int(game_win_counts.get(game_key, 0)) >= 3
     return false
 
 func _award_achievements() -> void:
@@ -500,7 +673,14 @@ func achievements() -> void:
         var unlocked: bool = achievement_claimed.has(str(item["id"]))
         var heading: String = ("UNLOCKED  •  " if unlocked else "LOCKED  •  ") + str(item["title"])
         var details: String = str(item["desc"]) + "\\nReward: %d coins + %d XP" % [int(item["coins"]), int(item["xp"])]
-        _card(heading, details)
+        var badge_card := _card(heading, details)
+        var badge_icon := TextureRect.new()
+        badge_icon.texture = preload("res://assets/ui/achievement_badge.png")
+        badge_icon.custom_minimum_size = Vector2(42, 42)
+        badge_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+        badge_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+        badge_icon.modulate = Color.WHITE if unlocked else Color(0.4, 0.46, 0.6, 0.55)
+        badge_card.get_child(0).add_child(badge_icon)
     content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "home"))
 
 func settings():
@@ -575,6 +755,17 @@ func reset_progress():
     best_stars = {}
     recent_games.clear()
     seen_tutorials.clear()
+    achievement_claimed.clear()
+    game_play_counts.clear()
+    game_win_counts.clear()
+    total_games_played = 0
+    total_wins = 0
+    achievement_new.clear()
+    owned_themes = {"classic": true}
+    equipped_theme = "classic"
+    owned_avatars = {"star": true}
+    equipped_avatar = "star"
+    shop_message = ""
     Difficulty.reset_all()
     _save()
     settings()
@@ -1103,6 +1294,7 @@ func _finished(id: String, score: int, extra: Dictionary = {}):
     game_play_counts[id] = int(game_play_counts.get(id, 0)) + 1
     if passed:
         total_wins += 1
+        game_win_counts[id] = int(game_win_counts.get(id, 0)) + 1
     _award_achievements()
     _save()
     _play_sound(SFX_WIN if passed else SFX_OOPS)
@@ -1245,7 +1437,7 @@ func _game_name(id: String) -> String:
 func _save():
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar}))
         f.close()
 
 func _load_save():
@@ -1266,6 +1458,17 @@ func _load_save():
         total_games_played = int(data.get("total_games_played", 0))
         total_wins = int(data.get("total_wins", 0))
         game_play_counts = data.get("game_play_counts", {})
+        game_win_counts = data.get("game_win_counts", {})
+        owned_themes = data.get("owned_themes", {"classic": true})
+        owned_themes["classic"] = true
+        owned_avatars = data.get("owned_avatars", {"star": true})
+        owned_avatars["star"] = true
+        equipped_avatar = str(data.get("equipped_avatar", "star"))
+        if not owned_avatars.has(equipped_avatar):
+            equipped_avatar = "star"
+        equipped_theme = str(data.get("equipped_theme", "classic"))
+        if not owned_themes.has(equipped_theme):
+            equipped_theme = "classic"
         recent_games.clear()
         for saved_id in data.get("recent_games", []):
             if _game_data(str(saved_id)).size() > 0 and recent_games.size() < 3:
