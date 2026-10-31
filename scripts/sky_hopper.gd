@@ -1,4 +1,5 @@
 extends Control
+const GameplayPop = preload("res://scripts/gameplay_pop.gd")
 signal finished(game_id: String, score: int, extra: Dictionary)
 
 const SKY := Color("#142755")
@@ -153,6 +154,7 @@ func _physics_process(delta: float) -> void:
         if player.distance_to(stars[i]) < 30.0:
             stars.remove_at(i)
             score += 75
+            GameplayPop.celebrate(message, "STAR COLLECTED!  +75", GOLD)
     score = maxi(score, int((440.0 - highest) / 6.0))
     if player.y - camera_y > HEIGHT + 60:
         _game_over()

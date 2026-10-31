@@ -137,7 +137,7 @@ func _press(x: int,y: int):
     if adjacent and board[y][x]==board[selected.y][selected.x]:
         var value: int=board[y][x]*2
         board[y][x]=value; board[selected.y][selected.x]=0; score+=value; moves+=1; selected=Vector2i(-1,-1); _add_tile()
-        status.text="✦ NICE MERGE! +%d ✦" % value
+        status.text = "SUPER MERGE! +%d" % value if value >= 16 else "NICE MERGE! +%d" % value
         status.add_theme_color_override("font_color", Color("#fef08a"))
         status.scale = Vector2(0.9, 0.9)
         var merge_tween := create_tween()

@@ -1,5 +1,6 @@
 extends Control
 class_name ColorSort
+const GameplayPop = preload("res://scripts/gameplay_pop.gd")
 
 signal finished(game_id: String, score: int, extra: Dictionary)
 signal gameplay_sound(kind: String)
@@ -182,7 +183,7 @@ func _pick(index: int) -> void:
     if is_instance_valid(pour_effect):
         pour_effect.queue_free()
         pour_effect = null
-    status.text = "Nice pour! Keep sorting."
+    GameplayPop.celebrate(status, "NICE POUR!  %d MOVES" % moves, Color("#67e8f9"))
     _refresh()
     if _solved():
         completed = true

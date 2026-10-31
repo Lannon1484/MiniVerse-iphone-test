@@ -179,7 +179,11 @@ func _tap(index: int) -> void:
             combo += 1
             var points := 10 + mini(combo, 10) * 2
             score += points
-            message_label.text = "+%d points! Combo x%d" % [points, combo]
+            message_label.text = "COMBO x%d! +%d" % [combo, points] if combo >= 3 else "+%d points!" % points
+            message_label.add_theme_color_override("font_color", Color("#fef08a") if combo >= 3 else Color("#a5f3fc"))
+            var hit_pulse := create_tween()
+            hit_pulse.tween_property(score_label, "scale", Vector2(1.13, 1.13), 0.09)
+            hit_pulse.tween_property(score_label, "scale", Vector2.ONE, 0.14)
         _clear_target()
         next_spawn = 0.15
     else:

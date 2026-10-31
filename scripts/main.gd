@@ -57,6 +57,11 @@ var sound_enabled := true
 var sound_player: AudioStreamPlayer
 var library_filter := "ALL"
 var seen_tutorials: Dictionary = {}
+var achievement_claimed: Dictionary = {}
+var total_games_played := 0
+var total_wins := 0
+var game_play_counts: Dictionary = {}
+var achievement_new: Array[String] = []
 var tutorial_overlay: Control
 
 const TUTORIALS := {
@@ -324,6 +329,7 @@ func home():
         _card("YOUR ADVENTURE STARTS HERE", "Play a game from the library and your three most recently played games will appear here.")
     content.add_child(_button("▦  OPEN GAME LIBRARY", library, Color("#344a9b")))
     content.add_child(_button("🏆  CHALLENGES & EVENTS", events, Color("#344a9b")))
+    content.add_child(_button("🏅  ACHIEVEMENTS", achievements, Color("#344a9b")))
     content.add_child(_button("⚙  SETTINGS", settings, Color("#344a9b")))
     _card("YOUR PROGRESS", "Level %d  ·  %d XP  ·  %d coins  ·  %d personal records" % [level, xp, coins, best_scores.size()])
 
@@ -436,6 +442,58 @@ func events():
     _card("🏆 MINIVERSE CUP", "Weekly score competitions will rotate between mini-games after an online backend is added.")
     _card("✦ MINIVERSE FESTIVAL", "Seasonal themes, cosmetic rewards, and special games are planned for future versions.")
     content.add_child(_button("← BACK TO HOME", home, PANEL2))
+
+const ACHIEVEMENT_INFO := [
+    {"id":"first_play", "title":"First Steps", "desc":"Play your first mini-game.", "coins":25, "xp":30},
+    {"id":"first_win", "title":"First Victory", "desc":"Complete your first level successfully.", "coins":40, "xp":50},
+    {"id":"five_plays", "title":"Getting Started", "desc":"Play five rounds across MiniVerse.", "coins":50, "xp":60},
+    {"id":"twenty_plays", "title":"Arcade Regular", "desc":"Play twenty rounds.", "coins":120, "xp":150},
+    {"id":"five_wins", "title":"Rising Star", "desc":"Win five rounds.", "coins":80, "xp":100},
+    {"id":"twenty_wins", "title":"Champion", "desc":"Win twenty rounds.", "coins":200, "xp":250},
+    {"id":"explorer", "title":"World Explorer", "desc":"Try all ten mini-games.", "coins":150, "xp":180},
+    {"id":"score_500", "title":"High Scorer", "desc":"Score 500 or more in a single round.", "coins":100, "xp":125}
+]
+
+func _achievement_unlocked(id: String) -> bool:
+    match id:
+        "first_play": return total_games_played >= 1
+        "first_win": return total_wins >= 1
+        "five_plays": return total_games_played >= 5
+        "twenty_plays": return total_games_played >= 20
+        "five_wins": return total_wins >= 5
+        "twenty_wins": return total_wins >= 20
+        "explorer": return game_play_counts.size() >= 10
+        "score_500":
+            for value in best_scores.values():
+                if int(value) >= 500:
+                    return true
+    return false
+
+func _award_achievements() -> void:
+    achievement_new.clear()
+    for item in ACHIEVEMENT_INFO:
+        var id: String = str(item["id"])
+        if not achievement_claimed.has(id) and _achievement_unlocked(id):
+            achievement_claimed[id] = true
+            coins += int(item["coins"])
+            xp += int(item["xp"])
+            achievement_new.append(str(item["title"]))
+    level = int(xp / 100) + 1
+
+func achievements() -> void:
+    _shell()
+    _heading("Achievements", "Earn badges, coins and XP by playing.")
+    var earned := 0
+    for item in ACHIEVEMENT_INFO:
+        if achievement_claimed.has(str(item["id"])):
+            earned += 1
+    _card("YOUR BADGES", "%d / %d unlocked  •  %d rounds played  •  %d victories" % [earned, ACHIEVEMENT_INFO.size(), total_games_played, total_wins])
+    for item in ACHIEVEMENT_INFO:
+        var unlocked: bool = achievement_claimed.has(str(item["id"]))
+        var heading: String = ("UNLOCKED  •  " if unlocked else "LOCKED  •  ") + str(item["title"])
+        var details: String = str(item["desc"]) + "\\nReward: %d coins + %d XP" % [int(item["coins"]), int(item["xp"])]
+        _card(heading, details)
+    content.add_child(_button("BACK TO HOME", home, PANEL2))
 
 func settings():
     _shell()
@@ -1033,7 +1091,11 @@ func _finished(id: String, score: int, extra: Dictionary = {}):
     var earned_xp: int = clampi(10 + int(sqrt(float(maxi(score, 0))) * 2.5), 10, 110)
     coins += reward
     xp += earned_xp
-    level = int(xp / 100) + 1
+    total_games_played += 1
+    game_play_counts[id] = int(game_play_counts.get(id, 0)) + 1
+    if passed:
+        total_wins += 1
+    _award_achievements()
     _save()
     _play_sound(SFX_WIN if passed else SFX_OOPS)
     _results(id, score, reward, record, earned_xp, stars_earned, played_level, goal, passed)
@@ -1059,6 +1121,9 @@ func _play_completed_rhythm_song(played_level: int) -> void:
 func _results(id: String, score: int, reward: int, record: bool, earned_xp: int, stars_earned: int, played_level: int, goal: int, passed: bool):
     _shell()
     _heading("Level Complete!" if passed else "Try Again!", "Level %d • %s" % [played_level, "Goal reached!" if passed else "You can retry this level."])
+    if not achievement_new.is_empty():
+        _card("NEW ACHIEVEMENT!", " • ".join(achievement_new) + "\\nBonus coins and XP added to your wallet.")
+
     var celebration := PanelContainer.new()
     celebration.add_theme_stylebox_override("panel", _style(Color("#25234e"), 22))
     content.add_child(celebration)
@@ -1172,7 +1237,7 @@ func _game_name(id: String) -> String:
 func _save():
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts}))
         f.close()
 
 func _load_save():
@@ -1189,6 +1254,10 @@ func _load_save():
         best_scores = data.get("best_scores",{})
         best_stars = data.get("best_stars",{})
         seen_tutorials = data.get("seen_tutorials",{})
+        achievement_claimed = data.get("achievement_claimed", {})
+        total_games_played = int(data.get("total_games_played", 0))
+        total_wins = int(data.get("total_wins", 0))
+        game_play_counts = data.get("game_play_counts", {})
         recent_games.clear()
         for saved_id in data.get("recent_games", []):
             if _game_data(str(saved_id)).size() > 0 and recent_games.size() < 3:

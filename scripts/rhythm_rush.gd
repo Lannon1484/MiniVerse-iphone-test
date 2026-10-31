@@ -1,4 +1,5 @@
 extends Control
+const GameplayPop = preload("res://scripts/gameplay_pop.gd")
 const Difficulty = preload("res://scripts/difficulty.gd")
 signal finished(game_id: String, score: int, extra: Dictionary)
 const COLORS := [Color("#ff82bd"), Color("#76d9ff"), Color("#ffe18b"), Color("#a58bff")]
@@ -187,7 +188,10 @@ func _hit(lane: int) -> void:
     combo += 1
     var perfect: bool = distance < perfect_window
     score += (100 if perfect else 60) + mini(combo, 25) * 3
-    feedback.text = "PERFECT!" if perfect else "GREAT!"
+    var callout: String = "PERFECT!" if perfect else "GREAT!"
+    if combo > 1 and combo % 5 == 0:
+        callout = "%d NOTE COMBO!" % combo
+    GameplayPop.celebrate(feedback, callout, Color("#ffe18b") if perfect else Color("#76d9ff"))
     _refresh()
 
 func _refresh() -> void:

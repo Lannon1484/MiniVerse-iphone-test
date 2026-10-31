@@ -103,13 +103,17 @@ func _drop():
         finished.emit("stack", score, {"height": score})
         _sync_playfield()
         return
+    var accuracy: float = overlap / maxf(1.0, minf(block_width, previous.size.x))
+    var perfect_drop: bool = accuracy >= 0.97
     block_x = left
     block_width = overlap
     tower.append(Rect2(block_x, 0.0, block_width, block_height))
     if is_instance_valid(area) and area.has_method("trigger_drop_effect"):
         area.trigger_drop_effect(block_x + block_width * 0.5, tower.size() - 1, colors[(tower.size() - 1) % colors.size()])
     score+=1; speed+=minf(20.0, 9.0 + float(difficulty_level - 1))
-    score_label.text="HEIGHT %d"%score; hint.text="✦ BLOCK PLACED! Height %d — time your next drop." % score
+    score_label.text="HEIGHT %d"%score
+    hint.text = "PERFECT PLACEMENT!" if perfect_drop else "BLOCK PLACED! Height %d" % score
+    hint.add_theme_color_override("font_color", Color("#fef08a") if perfect_drop else Color("#a5f3fc"))
     score_label.scale = Vector2(0.85, 0.85)
     var score_tween := create_tween()
     score_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)

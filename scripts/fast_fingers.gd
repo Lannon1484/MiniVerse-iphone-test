@@ -116,7 +116,14 @@ func _hit():
     combo += 1
     score += 10 + mini(combo-1,10)*2
     score_label.text = "SCORE %d" % score
-    combo_label.text = "COMBO %d" % combo
+    combo_label.text = "COMBO x%d" % combo
+    if combo >= 3:
+        combo_label.add_theme_color_override("font_color", Color("#fef08a"))
+        var combo_pulse := create_tween()
+        combo_pulse.tween_property(combo_label, "scale", Vector2(1.16, 1.16), 0.09)
+        combo_pulse.tween_property(combo_label, "scale", Vector2.ONE, 0.15)
+    if combo % 5 == 0:
+        _floating_combo(hit_position, combo)
     var pulse := create_tween()
     pulse.tween_property(score_label, "scale", Vector2(1.18, 1.18), 0.08)
     pulse.tween_property(score_label, "scale", Vector2.ONE, 0.14)
@@ -137,4 +144,17 @@ func _floating_score(at: Vector2, points: int) -> void:
     tween.set_parallel(true)
     tween.tween_property(popup, "position", popup.position - Vector2(0, 42), 0.48).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
     tween.tween_property(popup, "modulate:a", 0.0, 0.48)
+    tween.chain().tween_callback(popup.queue_free)
+
+func _floating_combo(at: Vector2, streak: int) -> void:
+    var popup := Label.new()
+    popup.text = "COMBO x%d!" % streak
+    popup.position = at + Vector2(-55, -65)
+    popup.add_theme_font_size_override("font_size", 26)
+    popup.add_theme_color_override("font_color", Color("#67e8f9"))
+    popup.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    area.add_child(popup)
+    var tween := create_tween().set_parallel(true)
+    tween.tween_property(popup, "position", popup.position - Vector2(0, 45), 0.65)
+    tween.tween_property(popup, "modulate:a", 0.0, 0.65)
     tween.chain().tween_callback(popup.queue_free)

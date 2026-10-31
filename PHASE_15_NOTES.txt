@@ -1,0 +1,9 @@
+MiniVerse Phase 15 — Gameplay Juice
+
+Fast Fingers: animated combo counter and milestone popups every five hits.
+Perfect Stack: PERFECT PLACEMENT message for high-overlap drops.
+Number Merge: SUPER MERGE feedback for merges of 16+.
+Whack-a-Mole: combo feedback and score pulse on mole hits.
+
+All existing gameplay, tutorials, progression, and artwork retained.
+Note: ZIP verified; Godot/Safari runtime testing still required.

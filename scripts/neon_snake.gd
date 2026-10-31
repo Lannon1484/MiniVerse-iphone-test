@@ -1,4 +1,5 @@
 extends Control
+const GameplayPop = preload("res://scripts/gameplay_pop.gd")
 
 signal finished(game_id: String, score: int, extra: Dictionary)
 
@@ -181,6 +182,7 @@ func _step() -> void:
     if eating:
         eaten += 1
         score += 10 + mini(eaten, 20)
+        GameplayPop.celebrate(hint_label, "SNACK!  %d EATEN" % eaten, GOLD)
         if snake.size() >= GRID_SIZE * GRID_SIZE:
             _end_run()
             return

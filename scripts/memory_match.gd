@@ -1,5 +1,6 @@
 extends Control
 class_name MemoryMatch
+const GameplayPop = preload("res://scripts/gameplay_pop.gd")
 
 signal finished(game_id: String, score: int, extra: Dictionary)
 
@@ -171,7 +172,7 @@ func _pick(index: int) -> void:
         pairs_found += 1
         score += maxi(20, 100 - moves * 2)
         first_pick = -1
-        status_label.text = "Level %d • %d of %d pairs." % [difficulty_level, pairs_found, int(cards.size() / 2)]
+        GameplayPop.celebrate(status_label, "MATCH FOUND!  %d / %d pairs" % [pairs_found, int(cards.size() / 2)], Color("#67e8f9"))
         _refresh_stats()
         if pairs_found == int(cards.size() / 2):
             running = false

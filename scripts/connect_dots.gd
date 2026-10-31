@@ -1,5 +1,6 @@
 extends Control
 class_name ConnectDots
+const GameplayPop = preload("res://scripts/gameplay_pop.gd")
 
 signal finished(game_id: String, score: int, extra: Dictionary)
 signal gameplay_sound(kind: String)
@@ -191,6 +192,7 @@ func _touch_cell(cell: Vector2i, beginning: bool) -> void:
     path.append(cell)
     if cell == destination:
         gameplay_sound.emit("connect")
+        GameplayPop.celebrate(message, "COLOR CONNECTED!  %d / %d" % [_connected_count(), COLORS.size()], Color("#67e8f9"))
     _refresh()
     if _connected_count() == COLORS.size():
         won = true
