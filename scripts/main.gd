@@ -50,6 +50,8 @@ var lobby_touch_scrolling := true
 var coins := 0
 var xp := 0
 var level := 1
+var last_rewarded_level := 1
+var level_up_notice := ""
 var best_scores: Dictionary = {}
 var best_stars: Dictionary = {}
 var recent_games: Array[String] = []
@@ -75,7 +77,11 @@ const SHOP_THEMES := [
     {"id":"sunset", "name":"Sunset Glow", "price":150, "color":"#fb923c", "description":"Warm orange highlights."},
     {"id":"ocean", "name":"Ocean Breeze", "price":250, "color":"#22d3ee", "description":"Cool turquoise highlights."},
     {"id":"emerald", "name":"Emerald Magic", "price":350, "color":"#34d399", "description":"Fresh green highlights."},
-    {"id":"rose", "name":"Rose Sparkle", "price":500, "color":"#fb7185", "description":"Bright pink highlights."}
+    {"id":"rose", "name":"Rose Sparkle", "price":500, "color":"#fb7185", "description":"Bright pink highlights."},
+    {"id":"challenger", "name":"Challenger Flame", "price":0, "level_required":10, "color":"#f97316", "description":"Exclusive level 10 reward. Fiery orange accents."},
+    {"id":"champion", "name":"Champion Gold", "price":0, "level_required":20, "color":"#facc15", "description":"Exclusive level 20 reward. Golden highlights."},
+    {"id":"master", "name":"Arcade Master Neon", "price":0, "level_required":35, "color":"#38bdf8", "description":"Exclusive level 35 reward. Brilliant neon blue."},
+    {"id":"legend", "name":"Arcade Legend", "price":0, "level_required":50, "color":"#e879f9", "description":"Exclusive level 50 reward. Legendary violet glow."}
 ]
 var owned_avatars: Dictionary = {"star": true}
 var equipped_avatar := "star"
@@ -198,6 +204,9 @@ func _rewards_hub() -> void:
     current_tab = "rewards"
     _shell()
     _heading("Rewards & Challenges", "Your daily rewards, achievements and events.")
+    if level_up_notice != "":
+        _card("LEVEL-UP REWARD!", level_up_notice)
+        level_up_notice = ""
     var daily_ready: int = _daily_rewards_ready()
     var weekly_ready: int = _weekly_rewards_ready()
     var total_ready: int = daily_ready + weekly_ready
@@ -491,6 +500,8 @@ func _shop_purchase(theme_id: String) -> void:
         if owned_themes.has(theme_id):
             equipped_theme = theme_id
             shop_message = "Equipped %s!" % str(item["name"])
+        elif int(item.get("level_required", 0)) > level:
+            shop_message = "Reach player level %d to unlock %s." % [int(item["level_required"]), str(item["name"])]
         elif coins >= cost:
             coins -= cost
             owned_themes[theme_id] = true
@@ -590,14 +601,15 @@ func shop() -> void:
             title.add_theme_font_size_override("font_size", 21)
             column.add_child(title)
             var description := Label.new()
-            description.text = str(item["description"]) + ("  •  Owned" if owned else "  •  %d coins" % price)
+            var required_level: int = int(item.get("level_required", 0))
+            description.text = str(item["description"]) + ("  •  Owned" if owned else ("  •  Unlocks at level %d" % required_level if required_level > 0 else "  •  %d coins" % price))
             description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
             description.add_theme_font_size_override("font_size", 19)
             description.add_theme_color_override("font_color", Color("#e4eaff"))
             column.add_child(description)
-            var button_label := "EQUIPPED" if equipped else ("EQUIP" if owned else "BUY FOR %d COINS" % price)
+            var button_label := "EQUIPPED" if equipped else ("EQUIP" if owned else ("UNLOCK AT LEVEL %d" % required_level if required_level > 0 else "BUY FOR %d COINS" % price))
             var purchase := _button(button_label, func(): _shop_purchase(id), theme_color)
-            purchase.disabled = equipped
+            purchase.disabled = equipped or (required_level > level and not owned)
             column.add_child(purchase)
     if shop_category == "avatars":
         _heading("Collectible Avatars", "Unlock a character to display beside your lobby progress.")
@@ -812,10 +824,115 @@ func _equip_profile_title(title_id: String) -> void:
     player_profile()
 
 
+# Overall player ranks are derived from the existing level and XP.
+# No migration or additional saved data is required.
+const PLAYER_RANK_LEVELS := [1, 5, 10, 20, 35, 50]
+const PLAYER_RANK_NAMES := ["Rookie", "Explorer", "Challenger", "Champion", "Arcade Master", "Arcade Legend"]
+
+func _player_rank_index(player_level: int) -> int:
+    var rank_index: int = 0
+    for i in range(PLAYER_RANK_LEVELS.size()):
+        if player_level >= int(PLAYER_RANK_LEVELS[i]):
+            rank_index = i
+    return rank_index
+
+
+func _player_rank_name(player_level: int) -> String:
+    return str(PLAYER_RANK_NAMES[_player_rank_index(player_level)])
+
+
+func _player_rank_progress() -> String:
+    var rank_index: int = _player_rank_index(level)
+    if rank_index >= PLAYER_RANK_LEVELS.size() - 1:
+        return "Highest rank achieved!"
+    var next_level: int = int(PLAYER_RANK_LEVELS[rank_index + 1])
+    return "Next: %s at level %d (%d levels away)" % [str(PLAYER_RANK_NAMES[rank_index + 1]), next_level, next_level - level]
+
+
+func _profile_progress_panel() -> void:
+    var panel := PanelContainer.new()
+    panel.add_theme_stylebox_override("panel", _lobby_card_style(_theme_color()))
+    content.add_child(panel)
+    var stack := VBoxContainer.new()
+    stack.add_theme_constant_override("separation", 10)
+    panel.add_child(stack)
+
+    var title_label := Label.new()
+    title_label.text = "LEVEL PROGRESSION"
+    title_label.add_theme_font_size_override("font_size", 23)
+    title_label.add_theme_color_override("font_color", _menu_accent_text(_theme_color()))
+    stack.add_child(title_label)
+
+    var current_xp: int = xp % 100
+    var progress_label := Label.new()
+    progress_label.text = "LEVEL %d  |  %d / 100 XP to level %d" % [level, current_xp, level + 1]
+    progress_label.add_theme_font_size_override("font_size", 19)
+    progress_label.add_theme_color_override("font_color", Color("#e4eaff"))
+    progress_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    stack.add_child(progress_label)
+
+    var xp_bar := ProgressBar.new()
+    xp_bar.custom_minimum_size = Vector2(0, 24)
+    xp_bar.min_value = 0
+    xp_bar.max_value = 100
+    xp_bar.value = current_xp
+    xp_bar.show_percentage = false
+    stack.add_child(xp_bar)
+
+    var rank_index: int = _player_rank_index(level)
+    var rank_label := Label.new()
+    rank_label.text = "CURRENT RANK: " + _player_rank_name(level).to_upper()
+    rank_label.add_theme_font_size_override("font_size", 20)
+    rank_label.add_theme_color_override("font_color", Color("#ffe29e"))
+    rank_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    stack.add_child(rank_label)
+
+    if rank_index < PLAYER_RANK_LEVELS.size() - 1:
+        var next_rank_level: int = int(PLAYER_RANK_LEVELS[rank_index + 1])
+        var rank_bar := ProgressBar.new()
+        rank_bar.custom_minimum_size = Vector2(0, 20)
+        rank_bar.min_value = int(PLAYER_RANK_LEVELS[rank_index])
+        rank_bar.max_value = next_rank_level
+        rank_bar.value = level
+        rank_bar.show_percentage = false
+        stack.add_child(rank_bar)
+        var next_rank_label := Label.new()
+        next_rank_label.text = "NEXT RANK: %s AT LEVEL %d" % [str(PLAYER_RANK_NAMES[rank_index + 1]).to_upper(), next_rank_level]
+        next_rank_label.add_theme_font_size_override("font_size", 18)
+        next_rank_label.add_theme_color_override("font_color", Color("#e4eaff"))
+        next_rank_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        stack.add_child(next_rank_label)
+    else:
+        var top_label := Label.new()
+        top_label.text = "You've reached the highest player rank!"
+        top_label.add_theme_font_size_override("font_size", 18)
+        stack.add_child(top_label)
+
+    var upcoming_level: int = 0
+    var upcoming_theme: String = ""
+    for cosmetic in SHOP_THEMES:
+        var required_level: int = int(cosmetic.get("level_required", 0))
+        if required_level > level and (upcoming_level == 0 or required_level < upcoming_level):
+            upcoming_level = required_level
+            upcoming_theme = str(cosmetic["name"])
+    var reward_label := Label.new()
+    if upcoming_level > 0:
+        reward_label.text = "NEXT EXCLUSIVE THEME: %s (LEVEL %d)" % [upcoming_theme.to_upper(), upcoming_level]
+    else:
+        reward_label.text = "ALL EXCLUSIVE LEVEL THEMES UNLOCKED!"
+    reward_label.add_theme_font_size_override("font_size", 18)
+    reward_label.add_theme_color_override("font_color", _menu_accent_text(_theme_color()))
+    reward_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    stack.add_child(reward_label)
+
+
 func player_profile() -> void:
     current_tab = "profile"
     _shell()
     _heading("Player Profile", "Your MiniVerse journey, all in one place.")
+    if level_up_notice != "":
+        _card("LEVEL-UP REWARD!", level_up_notice)
+        level_up_notice = ""
     var avatar_panel := PanelContainer.new()
     avatar_panel.add_theme_stylebox_override("panel", _style(PANEL.lerp(_theme_color(), 0.20), 18))
     content.add_child(avatar_panel)
@@ -837,6 +954,12 @@ func player_profile() -> void:
     profile_level.text = "Level %d  |  %d total XP" % [level, xp]
     profile_level.add_theme_color_override("font_color", TEXT)
     profile_details.add_child(profile_level)
+    var rank_label := Label.new()
+    rank_label.text = "RANK: " + _player_rank_name(level).to_upper()
+    rank_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    rank_label.add_theme_font_size_override("font_size", 21)
+    rank_label.add_theme_color_override("font_color", Color("#ffe29e"))
+    profile_details.add_child(rank_label)
     var profile_wallet := Label.new()
     profile_wallet.text = "%d coins available" % coins
     profile_wallet.add_theme_color_override("font_color", MUTED)
@@ -844,6 +967,7 @@ func player_profile() -> void:
     var total_stars: int = _profile_total_stars()
     var unlocked_achievements: int = _profile_achievement_count()
     if profile_section == "overview":
+        _profile_progress_panel()
         _card("OVERALL PERFORMANCE", "Rounds played: %d\nLevels cleared: %d\nWin rate: %s\nFavorite game: %s" % [total_games_played, total_wins, _stat_rate(total_wins, total_games_played), _profile_favorite()])
         _card("COLLECTION & REWARDS", "Achievements: %d / %d\nBest stars earned: %d / 30\nThemes owned: %d / %d\nAvatars owned: %d / %d\nVictory effects owned: %d / %d\nDaily login claims: %d" % [unlocked_achievements, ACHIEVEMENT_INFO.size(), total_stars, owned_themes.size(), SHOP_THEMES.size(), owned_avatars.size(), SHOP_AVATARS.size(), owned_effects.size(), SHOP_EFFECTS.size(), login_total_claims])
     _section_chips(["Overview", "Titles", "Milestones", "Games"], profile_section.capitalize(), func(value: String):
@@ -863,6 +987,18 @@ func player_profile() -> void:
             if title_available and not title_equipped:
                 content.add_child(_button("EQUIP " + title_name.to_upper(), func(): _equip_profile_title(title_id), Color("#344a9b"), 48))
     if profile_section == "milestones":
+        _heading("Player Ranks", "Rise through six ranks as your overall player level grows.")
+        for rank_i in range(PLAYER_RANK_LEVELS.size()):
+            var required_level: int = int(PLAYER_RANK_LEVELS[rank_i])
+            var earned_rank: bool = level >= required_level
+            var rank_status: String = "UNLOCKED" if earned_rank else "LOCKED"
+            _card(str(PLAYER_RANK_NAMES[rank_i]).to_upper() + "  -  " + rank_status, "Reach player level %d." % required_level)
+        _heading("EXCLUSIVE COSMETIC REWARDS", "Level up to unlock special themes for free.")
+        for cosmetic in SHOP_THEMES:
+            var unlock_level: int = int(cosmetic.get("level_required", 0))
+            if unlock_level > 0:
+                var is_unlocked: bool = owned_themes.has(str(cosmetic["id"]))
+                _card(str(cosmetic["name"]).to_upper() + (" - UNLOCKED" if is_unlocked else " - LOCKED"), "Level %d milestone. %s" % [unlock_level, "Available in Shop > Themes." if is_unlocked else "Keep leveling to earn this theme."])
         _heading("Personal Milestones", "Track the goals you've reached across MiniVerse.")
         _profile_milestone("First Steps", "Finish 10 mini-game rounds.", total_games_played >= 10)
         _profile_milestone("Winning Habit", "Clear 25 levels across all games.", total_wins >= 25)
@@ -930,15 +1066,52 @@ func home():
     subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     subtitle.add_theme_color_override("font_color", Color("#e1e7ff"))
     welcome.add_child(subtitle)
-    var profile := HBoxContainer.new()
-    profile.alignment = BoxContainer.ALIGNMENT_CENTER
-    profile.add_theme_constant_override("separation", 10)
-    content.add_child(profile)
-    profile.add_child(_avatar_image(equipped_avatar, 62))
-    var profile_label := Label.new()
-    profile_label.text = "YOUR AVATAR  •  Level %d" % level
-    profile_label.add_theme_color_override("font_color", _menu_accent_text(_theme_color()))
-    profile.add_child(profile_label)
+    # At-a-glance player identity and progression on the home lobby.
+    var lobby_profile := PanelContainer.new()
+    lobby_profile.add_theme_stylebox_override("panel", _lobby_card_style(_theme_color()))
+    content.add_child(lobby_profile)
+    var lobby_stack := VBoxContainer.new()
+    lobby_stack.add_theme_constant_override("separation", 9)
+    lobby_profile.add_child(lobby_stack)
+    var identity_row := HBoxContainer.new()
+    identity_row.add_theme_constant_override("separation", 12)
+    lobby_stack.add_child(identity_row)
+    identity_row.add_child(_avatar_image(equipped_avatar, 66))
+    var identity_text := VBoxContainer.new()
+    identity_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    identity_text.add_theme_constant_override("separation", 3)
+    identity_row.add_child(identity_text)
+    var lobby_title := Label.new()
+    lobby_title.text = _title_display_name(equipped_title).to_upper() if _title_unlocked(equipped_title) else _title_display_name("explorer").to_upper()
+    lobby_title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    lobby_title.add_theme_font_size_override("font_size", 20)
+    lobby_title.add_theme_color_override("font_color", _menu_accent_text(_theme_color()))
+    identity_text.add_child(lobby_title)
+    var lobby_rank := Label.new()
+    lobby_rank.text = "%s  |  LEVEL %d" % [_player_rank_name(level).to_upper(), level]
+    lobby_rank.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    lobby_rank.add_theme_font_size_override("font_size", 18)
+    lobby_rank.add_theme_color_override("font_color", Color("#ffe29e"))
+    identity_text.add_child(lobby_rank)
+    var lobby_xp := Label.new()
+    lobby_xp.text = "%d / 100 XP TO LEVEL %d" % [xp % 100, level + 1]
+    lobby_xp.add_theme_font_size_override("font_size", 18)
+    lobby_xp.add_theme_color_override("font_color", Color("#e4eaff"))
+    lobby_stack.add_child(lobby_xp)
+    var lobby_xp_bar := ProgressBar.new()
+    lobby_xp_bar.custom_minimum_size = Vector2(0, 22)
+    lobby_xp_bar.min_value = 0
+    lobby_xp_bar.max_value = 100
+    lobby_xp_bar.value = xp % 100
+    lobby_xp_bar.show_percentage = false
+    lobby_stack.add_child(lobby_xp_bar)
+    var next_rank := Label.new()
+    next_rank.text = _player_rank_progress()
+    next_rank.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    next_rank.add_theme_font_size_override("font_size", 17)
+    next_rank.add_theme_color_override("font_color", Color("#e4eaff"))
+    lobby_stack.add_child(next_rank)
+    lobby_stack.add_child(_button("VIEW MY PROFILE", player_profile, _theme_color(), 52))
     content.add_child(_menu_button("PLAY A RANDOM GAME", _random_game, Color("#36e58a"), "play", 60))
     var quick_actions := HBoxContainer.new()
     quick_actions.add_theme_constant_override("separation", 8)
@@ -1213,6 +1386,8 @@ func reset_progress():
     coins = 0
     xp = 0
     level = 1
+    last_rewarded_level = 1
+    level_up_notice = ""
     best_scores = {}
     best_stars = {}
     recent_games.clear()
@@ -2051,6 +2226,9 @@ func _play_completed_rhythm_song(played_level: int) -> void:
 func _results(id: String, score: int, reward: int, record: bool, earned_xp: int, stars_earned: int, played_level: int, goal: int, passed: bool):
     _shell()
     _heading("Level Complete!" if passed else "Try Again!", "Level %d • %s" % [played_level, "Goal reached!" if passed else "You can retry this level."])
+    if level_up_notice != "":
+        _card("NEW PLAYER LEVEL!", level_up_notice)
+        level_up_notice = ""
     if not achievement_new.is_empty():
         _card("NEW ACHIEVEMENT!", " • ".join(achievement_new) + "\\nBonus coins and XP added to your wallet.")
     for mission in _mission_definitions():
@@ -2170,10 +2348,43 @@ func _game_name(id: String) -> String:
         return str(data.title)
     return "Mini-game"
 
+func _grant_milestone_cosmetics(show_notice: bool = false) -> void:
+    var newly_unlocked: Array[String] = []
+    for item in SHOP_THEMES:
+        var required: int = int(item.get("level_required", 0))
+        var cosmetic_id: String = str(item["id"])
+        if required > 0 and level >= required and not owned_themes.has(cosmetic_id):
+            owned_themes[cosmetic_id] = true
+            newly_unlocked.append(str(item["name"]))
+    if show_notice and not newly_unlocked.is_empty():
+        var names: String = ", ".join(newly_unlocked)
+        level_up_notice += "\nExclusive theme unlocked: " + names + "! Find it in Shop > Themes."
+
+
+func _apply_level_rewards() -> void:
+    # This runs before each save, after gameplay or claimed XP changes.
+    # Existing players are baselined at their saved level when first loading
+    # this feature, so old progress is never rewarded twice.
+    var actual_level: int = maxi(1, int(xp / 100) + 1)
+    level = actual_level
+    if actual_level <= last_rewarded_level:
+        return
+    var total_bonus: int = 0
+    var gained: int = actual_level - last_rewarded_level
+    for earned_level in range(last_rewarded_level + 1, actual_level + 1):
+        total_bonus += 20 + 5 * earned_level
+    coins += total_bonus
+    last_rewarded_level = actual_level
+    level_up_notice = "LEVEL UP! Reached level %d (+%d levels). Bonus: +%d coins!" % [actual_level, gained, total_bonus]
+    _grant_milestone_cosmetics(true)
+
+
 func _save():
+    _apply_level_rewards()
+    _grant_milestone_cosmetics()
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"last_rewarded_level":last_rewarded_level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day}))
         f.close()
 
 func _load_save():
@@ -2202,6 +2413,8 @@ func _load_save():
         coins = int(data.get("coins",0))
         xp = int(data.get("xp",0))
         level = int(data.get("level",1))
+        last_rewarded_level = int(data.get("last_rewarded_level", level))
+        last_rewarded_level = maxi(1, last_rewarded_level)
         best_scores = data.get("best_scores",{})
         best_stars = data.get("best_stars",{})
         seen_tutorials = data.get("seen_tutorials",{})
@@ -2212,6 +2425,7 @@ func _load_save():
         game_win_counts = data.get("game_win_counts", {})
         owned_themes = data.get("owned_themes", {"classic": true})
         owned_themes["classic"] = true
+        _grant_milestone_cosmetics()
         owned_avatars = data.get("owned_avatars", {"star": true})
         owned_avatars["star"] = true
         owned_effects = data.get("owned_effects", {"classic": true})
