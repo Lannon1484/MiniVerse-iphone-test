@@ -50,6 +50,9 @@ const GAMES := [
 var current_tab := "home"
 var shop_category := "home"
 var profile_section := "overview"
+var showcased_badge := "none"
+var showcased_game := "none"
+var showcase_notice := ""
 var content: VBoxContainer
 var lobby_scroll: ScrollContainer
 var lobby_wallet_label: Label
@@ -70,6 +73,63 @@ var show_background_glow := true
 var compact_menus := false
 var show_header_tagline := true
 var settings_section := "home"
+var equipped_background := "midnight"
+var equipped_banner := "starlight"
+var equipped_banner_decoration := "sparkles"
+var custom_player_name := "Player"
+var custom_player_motto := "Small games. Big fun."
+var equipped_name_style := "classic"
+var owned_name_styles: Dictionary = {}
+var name_style_notice := ""
+const NAME_STYLES = [
+    {"id":"classic","name":"Classic","color":"#ffffff","symbol":"","description":"Simple white name"},
+    {"id":"sky","name":"Sky Blue","color":"#8ad8ff","symbol":"✦","description":"Bright blue name with a star"},
+    {"id":"rose","name":"Rose","color":"#ffb5d1","symbol":"♥","description":"Soft pink name with a heart"},
+    {"id":"mint","name":"Mint","color":"#a3f7c5","symbol":"❖","description":"Fresh green name with a flourish","price":120},
+    {"id":"gold","name":"Golden","color":"#ffe08a","symbol":"★","description":"Golden champion nameplate","price":200},
+    {"id":"royal","name":"Royal","color":"#d5b5ff","symbol":"♛","description":"Regal violet nameplate","level_required":5},
+    {"id":"legend","name":"Legend","color":"#ffca92","symbol":"◆","description":"Exclusive level-ten nameplate","level_required":10}
+]
+
+var identity_edit_notice := ""
+var owned_banner_decorations: Dictionary = {}
+var banner_decoration_notice := ""
+const BANNER_DECORATIONS = [
+    {"id":"none","name":"None","symbol":"","description":"A clean, minimal banner"},
+    {"id":"sparkles","name":"Sparkles","symbol":"✦","description":"Classic shimmering stars"},
+    {"id":"hearts","name":"Hearts","symbol":"♥","description":"A cheerful heart accent"},
+    {"id":"crown","name":"Royal Crown","symbol":"♛","description":"A regal banner accent","price":180},
+    {"id":"diamonds","name":"Diamonds","symbol":"◆","description":"Sharp crystal decorations","price":240},
+    {"id":"stars","name":"Champion Stars","symbol":"★","description":"Earned at player level 5","level_required":5},
+    {"id":"laurel","name":"Victory Laurel","symbol":"❖","description":"Earned at player level 10","level_required":10}
+]
+
+var owned_backgrounds: Dictionary = {}
+var owned_banners: Dictionary = {}
+var cosmetic_unlock_message := ""
+var banner_animation_enabled := true
+const MENU_BACKGROUNDS = [
+    {"id":"midnight","name":"Midnight","color":"#0b1026","description":"Classic deep-space navy"},
+    {"id":"nebula","name":"Nebula","color":"#241239","description":"Violet cosmic haze"},
+    {"id":"ocean","name":"Deep Ocean","color":"#082a36","description":"Calm underwater blue"},
+    {"id":"forest","name":"Enchanted Forest","color":"#112b25","description":"Rich emerald shadows"},
+    {"id":"sunset","name":"Sunset Arcade","color":"#38202e","description":"Warm pink twilight"},
+    {"id":"galaxy","name":"Galaxy","color":"#27174b","description":"Unlock with 150 coins","price":150},
+    {"id":"lava","name":"Lava","color":"#442019","description":"Unlock with 250 coins","price":250},
+    {"id":"ice","name":"Frost","color":"#133c53","description":"Earn at player level 5","level_required":5},
+    {"id":"gold","name":"Golden Hour","color":"#443719","description":"Earn at player level 10","level_required":10}
+]
+const PROFILE_BANNERS = [
+    {"id":"starlight","name":"Starlight","color":"#3450a2","description":"A bright blue welcome"},
+    {"id":"aurora","name":"Aurora","color":"#286f73","description":"Cool northern lights"},
+    {"id":"royal","name":"Royal Purple","color":"#6d3e9b","description":"A bold purple banner"},
+    {"id":"ember","name":"Ember","color":"#a14c42","description":"Warm sunset energy"},
+    {"id":"prism","name":"Prism","color":"#5c448f","description":"Unlock with 120 coins","price":120},
+    {"id":"champion","name":"Champion","color":"#8d6333","description":"Unlock with 220 coins","price":220},
+    {"id":"explorer","name":"Explorer","color":"#29745c","description":"Earn at player level 5","level_required":5},
+    {"id":"legend","name":"Legend","color":"#873d73","description":"Earn at player level 10","level_required":10}
+]
+
 var sound_player: AudioStreamPlayer
 var library_filter := "ALL"
 var favorite_games: Dictionary = {}
@@ -384,7 +444,7 @@ func _shell():
         if c != sound_player:
             c.queue_free()
     var bg := ColorRect.new()
-    bg.color = BG.lerp(_theme_color(), 0.10)
+    bg.color = _background_color().lerp(_theme_color(), 0.06)
     bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     add_child(bg)
     # Subtle arcade-style corner lights behind the interface.
@@ -582,6 +642,230 @@ func _play_sound(stream: AudioStream) -> void:
         sound_player.stream = stream
         sound_player.play()
 
+func _background_color() -> Color:
+    for item in MENU_BACKGROUNDS:
+        if str(item["id"]) == equipped_background:
+            return Color(str(item["color"]))
+    return BG
+
+
+func _background_name() -> String:
+    for item in MENU_BACKGROUNDS:
+        if str(item["id"]) == equipped_background:
+            return str(item["name"])
+    return "Midnight"
+
+
+func _profile_banner_preview(banner_id: String, large: bool = false) -> PanelContainer:
+    var banner_item: Dictionary = PROFILE_BANNERS[0]
+    for item in PROFILE_BANNERS:
+        if str(item["id"]) == banner_id:
+            banner_item = item
+            break
+    var color: Color = Color(str(banner_item["color"]))
+    var panel := PanelContainer.new()
+    var style := _style(color, 18)
+    style.border_width_left = 3
+    style.border_width_right = 3
+    style.border_width_top = 3
+    style.border_width_bottom = 3
+    style.border_color = color.lightened(0.42)
+    style.content_margin_top = 26 if large else 16
+    style.content_margin_bottom = 26 if large else 16
+    panel.add_theme_stylebox_override("panel", style)
+    var stack := VBoxContainer.new()
+    stack.add_theme_constant_override("separation", 8)
+    panel.add_child(stack)
+    var symbol := Label.new()
+    symbol.text = _banner_decoration_symbol() if banner_id == equipped_banner else "✦  ◆  ✦"
+    symbol.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    symbol.add_theme_font_size_override("font_size", 26 if large else 21)
+    symbol.add_theme_color_override("font_color", Color.WHITE)
+    stack.add_child(symbol)
+    var name_label := Label.new()
+    name_label.text = str(banner_item["name"]).to_upper()
+    name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    name_label.add_theme_font_size_override("font_size", 26 if large else 20)
+    name_label.add_theme_color_override("font_color", Color.WHITE)
+    stack.add_child(name_label)
+    if large:
+        var subtitle := Label.new()
+        subtitle.text = "MY MINIVERSE PROFILE"
+        subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        subtitle.add_theme_font_size_override("font_size", 15)
+        subtitle.add_theme_color_override("font_color", Color.WHITE)
+        stack.add_child(subtitle)
+    return panel
+
+
+func _save_player_identity(new_name: String, new_motto: String) -> void:
+    var clean_name: String = new_name.strip_edges().replace("\n", " ").replace("\r", " ")
+    var clean_motto: String = new_motto.strip_edges().replace("\n", " ").replace("\r", " ")
+    if clean_name.is_empty():
+        identity_edit_notice = "Please enter a player name."
+        _open_profile_section("identity")
+        return
+    custom_player_name = clean_name.substr(0, 18)
+    custom_player_motto = clean_motto.substr(0, 48)
+    identity_edit_notice = "Your identity has been saved!"
+    _save()
+    _open_profile_section("identity")
+
+
+func _name_style_data() -> Dictionary:
+    for item in NAME_STYLES:
+        if str(item["id"]) == equipped_name_style:
+            return item
+    return NAME_STYLES[0]
+
+
+func _styled_player_name() -> String:
+    var symbol: String = str(_name_style_data().get("symbol", ""))
+    return (symbol + "  " if symbol != "" else "") + custom_player_name
+
+
+func _name_style_owned(item: Dictionary) -> bool:
+    var item_id: String = str(item["id"])
+    var required_level: int = int(item.get("level_required", 0))
+    var price: int = int(item.get("price", 0))
+    return (price == 0 and required_level == 0) or (required_level > 0 and level >= required_level) or owned_name_styles.has(item_id)
+
+
+func _choose_name_style(item_id: String) -> void:
+    for item in NAME_STYLES:
+        if str(item["id"]) != item_id:
+            continue
+        var style_name: String = str(item["name"])
+        var price: int = int(item.get("price", 0))
+        var required_level: int = int(item.get("level_required", 0))
+        if _name_style_owned(item):
+            equipped_name_style = item_id
+            name_style_notice = "Equipped " + style_name + "."
+        elif required_level > level:
+            name_style_notice = "Reach level %d to unlock %s." % [required_level, style_name]
+        elif coins < price:
+            name_style_notice = "You need %d more coins for %s." % [price - coins, style_name]
+        else:
+            coins -= price
+            owned_name_styles[item_id] = true
+            equipped_name_style = item_id
+            name_style_notice = "Unlocked %s for %d coins!" % [style_name, price]
+        _save()
+        _open_profile_section("name_styles")
+        return
+
+
+func _banner_decoration_symbol() -> String:
+    for item in BANNER_DECORATIONS:
+        if str(item["id"]) == equipped_banner_decoration:
+            var symbol: String = str(item["symbol"])
+            return symbol + "   " + symbol if symbol != "" else ""
+    return "✦   ✦"
+
+
+func _decorated_banner_title() -> String:
+    var symbol: String = _banner_decoration_symbol()
+    return symbol + "  " + _banner_name().to_upper() + "  " + symbol if symbol != "" else _banner_name().to_upper()
+
+
+func _banner_decoration_owned(item: Dictionary) -> bool:
+    var decoration_id: String = str(item["id"])
+    var required_level: int = int(item.get("level_required", 0))
+    var price: int = int(item.get("price", 0))
+    return (required_level == 0 and price == 0) or (required_level > 0 and level >= required_level) or owned_banner_decorations.has(decoration_id)
+
+
+func _choose_banner_decoration(decoration_id: String) -> void:
+    for item in BANNER_DECORATIONS:
+        if str(item["id"]) != decoration_id:
+            continue
+        var name: String = str(item["name"])
+        var price: int = int(item.get("price", 0))
+        var required_level: int = int(item.get("level_required", 0))
+        if _banner_decoration_owned(item):
+            equipped_banner_decoration = decoration_id
+            banner_decoration_notice = "Equipped " + name + "."
+        elif required_level > level:
+            banner_decoration_notice = "Reach level %d to unlock %s." % [required_level, name]
+        elif price > coins:
+            banner_decoration_notice = "You need %d more coins for %s." % [price - coins, name]
+        else:
+            coins -= price
+            owned_banner_decorations[decoration_id] = true
+            equipped_banner_decoration = decoration_id
+            banner_decoration_notice = "Unlocked and equipped %s for %d coins!" % [name, price]
+        _save()
+        _open_profile_section("decorations")
+        return
+
+
+func _banner_color() -> Color:
+    for item in PROFILE_BANNERS:
+        if str(item["id"]) == equipped_banner:
+            return Color(str(item["color"]))
+    return Color("#3450a2")
+
+
+func _banner_name() -> String:
+    for item in PROFILE_BANNERS:
+        if str(item["id"]) == equipped_banner:
+            return str(item["name"])
+    return "Starlight"
+
+
+func _equip_background(id: String) -> void:
+    _unlock_cosmetic_choice("background", id)
+
+
+func _equip_banner(id: String) -> void:
+    _unlock_cosmetic_choice("banner", id)
+
+
+func _cosmetic_owned(kind: String, item: Dictionary) -> bool:
+    var cosmetic_id: String = str(item["id"])
+    if int(item.get("price", 0)) == 0 and int(item.get("level_required", 0)) == 0:
+        return true
+    if int(item.get("level_required", 0)) > 0 and level >= int(item["level_required"]):
+        return true
+    return owned_backgrounds.has(cosmetic_id) if kind == "background" else owned_banners.has(cosmetic_id)
+
+
+func _unlock_cosmetic_choice(kind: String, cosmetic_id: String) -> void:
+    var items: Array = MENU_BACKGROUNDS if kind == "background" else PROFILE_BANNERS
+    for item in items:
+        if str(item["id"]) != cosmetic_id:
+            continue
+        var item_name: String = str(item["name"])
+        var required_level: int = int(item.get("level_required", 0))
+        var price: int = int(item.get("price", 0))
+        if _cosmetic_owned(kind, item):
+            if kind == "background":
+                equipped_background = cosmetic_id
+            else:
+                equipped_banner = cosmetic_id
+            cosmetic_unlock_message = "Equipped %s!" % item_name
+        elif required_level > level:
+            cosmetic_unlock_message = "Reach player level %d to unlock %s." % [required_level, item_name]
+        elif coins >= price and price > 0:
+            coins -= price
+            if kind == "background":
+                owned_backgrounds[cosmetic_id] = true
+                equipped_background = cosmetic_id
+            else:
+                owned_banners[cosmetic_id] = true
+                equipped_banner = cosmetic_id
+            cosmetic_unlock_message = "Unlocked and equipped %s for %d coins!" % [item_name, price]
+            _play_sound(SFX_COLLECT)
+        else:
+            cosmetic_unlock_message = "You need %d more coins for %s." % [price - coins, item_name]
+        _save()
+        if kind == "background":
+            _settings_page("backgrounds")
+        else:
+            _open_profile_section("banners")
+        return
+
+
 func _theme_color() -> Color:
     for item in SHOP_THEMES:
         if str(item["id"]) == equipped_theme:
@@ -665,7 +949,16 @@ func _framed_avatar(avatar_id: String, dimension: int = 64) -> PanelContainer:
     style.set_corner_radius_all(18)
     style.set_content_margin_all(5)
     panel.add_theme_stylebox_override("panel", style)
-    panel.add_child(_avatar_image(avatar_id, dimension))
+    # HBoxContainer otherwise stretches the frame to match taller name/rank text.
+    # Keep the avatar square and center it vertically beside player details.
+    panel.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    panel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+    var square_size: float = float(dimension + 20)
+    panel.custom_minimum_size = Vector2(square_size, square_size)
+    var avatar_picture := _avatar_image(avatar_id, dimension)
+    avatar_picture.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+    avatar_picture.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+    panel.add_child(avatar_picture)
     return panel
 
 
@@ -1108,6 +1401,63 @@ func _badge_data(badge_id: String) -> Dictionary:
     return PROFILE_BADGES[0]
 
 
+func _showcase_game_label() -> Label:
+    var display := Label.new()
+    display.add_theme_font_size_override("font_size", 16)
+    display.add_theme_color_override("font_color", Color("#e4eaff"))
+    display.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    display.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    if showcased_game == "none":
+        display.text = "FEATURED GAME  •  None selected"
+    else:
+        var title: String = showcased_game
+        for g in GAMES:
+            if str(g.id) == showcased_game:
+                title = str(g.title)
+                break
+        display.text = "FAVORITE GAME  •  %s  |  BEST %d  |  %d ★" % [title, int(best_scores.get(showcased_game, 0)), int(best_stars.get(showcased_game, 0))]
+    return display
+
+
+func _choose_showcase_game(selected_id: String) -> void:
+    if selected_id != "none":
+        var found: bool = false
+        for g in GAMES:
+            if str(g.id) == selected_id:
+                found = true
+                break
+        if not found:
+            return
+    showcased_game = selected_id
+    showcase_notice = "Featured game updated!"
+    _save()
+    _open_profile_section("showcase")
+
+
+func _showcase_label() -> Label:
+    var display := Label.new()
+    if showcased_badge == "none" or not _badge_unlocked(showcased_badge):
+        display.text = "SHOWCASE  •  No featured badge"
+        display.add_theme_color_override("font_color", Color("#d4ddf7"))
+    else:
+        var badge: Dictionary = _badge_data(showcased_badge)
+        display.text = "SHOWCASE  •  %s  %s" % [str(badge["symbol"]), str(badge["name"])]
+        display.add_theme_color_override("font_color", Color(str(badge["color"])))
+    display.add_theme_font_size_override("font_size", 16)
+    display.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    return display
+
+
+func _choose_showcase_badge(badge_id: String) -> void:
+    if badge_id != "none" and not _badge_unlocked(badge_id):
+        showcase_notice = "That badge is still locked."
+    else:
+        showcased_badge = badge_id
+        showcase_notice = "Showcase updated!"
+        _save()
+    _open_profile_section("showcase")
+
+
 func _badge_label() -> Label:
     var badge: Dictionary = _badge_data(equipped_profile_badge)
     var label_node := Label.new()
@@ -1237,6 +1587,13 @@ func player_profile() -> void:
     current_tab = "profile"
     _shell()
     _heading("Player Profile", "Your MiniVerse journey, all in one place.")
+    # Large banner with a contrasting border and prominent title.
+    content.add_child(_profile_banner_preview(equipped_banner, true))
+    if showcased_badge != "none" and _badge_unlocked(showcased_badge):
+        content.add_child(_showcase_label())
+    if showcased_game != "none":
+        content.add_child(_showcase_game_label())
+
     if level_up_notice != "":
         _card("LEVEL-UP REWARD!", level_up_notice)
         level_up_notice = ""
@@ -1256,6 +1613,18 @@ func player_profile() -> void:
     profile_title.text = _title_display_name(equipped_title).to_upper()
     profile_title.add_theme_color_override("font_color", _menu_accent_text(_theme_color()))
     profile_title.add_theme_font_size_override("font_size", 19)
+    var profile_name := Label.new()
+    profile_name.text = _styled_player_name()
+    profile_name.add_theme_font_size_override("font_size", 24)
+    profile_name.add_theme_color_override("font_color", Color(str(_name_style_data()["color"])))
+    profile_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    profile_details.add_child(profile_name)
+    var profile_motto := Label.new()
+    profile_motto.text = custom_player_motto
+    profile_motto.add_theme_font_size_override("font_size", 16)
+    profile_motto.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    profile_motto.add_theme_color_override("font_color", Color("#e4eaff"))
+    profile_details.add_child(profile_motto)
     profile_details.add_child(profile_title)
     profile_details.add_child(_badge_label())
     var profile_level := Label.new()
@@ -1274,11 +1643,22 @@ func player_profile() -> void:
     profile_details.add_child(profile_wallet)
     var total_stars: int = _profile_total_stars()
     var unlocked_achievements: int = _profile_achievement_count()
-    _section_chips(["Overview", "Customize", "Progress", "Games"], profile_section.capitalize() if profile_section in ["overview", "customize", "progress", "games"] else "Customize" if profile_section in ["frames", "collection", "badges", "titles"] else "Progress", func(value: String):
+    _section_chips(["Overview", "Customize", "Progress", "Games"], profile_section.capitalize() if profile_section in ["overview", "customize", "progress", "games"] else "Customize" if profile_section in ["frames", "collection", "badges", "titles", "banners", "decorations", "identity", "name_styles"] else "Progress", func(value: String):
         _open_profile_section(value.to_lower())
     )
     if profile_section == "customize":
         _heading("My Customization", "Choose a category to manage your collection.")
+        _card("FEATURED SHOWCASE", "Pick one earned badge to highlight on your Home avatar banner.")
+        content.add_child(_button("EDIT MY SHOWCASE", func(): _open_profile_section("showcase"), _theme_color(), 54))
+        _card("NAME STYLES", "Choose your name color and collectible nameplate symbol.")
+        content.add_child(_button("CUSTOMIZE NAME STYLE", func(): _open_profile_section("name_styles"), _theme_color(), 54))
+        _card("PLAYER NAME & MOTTO", "Choose the name and short message displayed beside your avatar on Home and Profile.")
+        content.add_child(_button("EDIT MY IDENTITY", func(): _open_profile_section("identity"), _theme_color(), 54))
+        _card("BANNER DECORATIONS", "Add stars, hearts, crowns, and other small accents to your Home avatar banner.")
+        content.add_child(_button("CHANGE BANNER DECORATION", func(): _open_profile_section("decorations"), _theme_color(), 54))
+        _card("PROFILE BANNERS", "Choose a colorful banner for the top of your profile.")
+        content.add_child(_button("CHANGE PROFILE BANNER", func(): _open_profile_section("banners"), _theme_color(), 54))
+
         _card("AVATAR FRAMES", "%d / %d unlocked" % [owned_avatar_frames.size(), AVATAR_FRAMES.size()])
         content.add_child(_button("MANAGE FRAMES", func(): _open_profile_section("frames"), _theme_color(), 54))
         _card("PROFILE BADGES", "Earn and display badges through gameplay.")
@@ -1291,7 +1671,7 @@ func player_profile() -> void:
         _heading("Player Progress", "Your ranks, milestones, and game collection.")
         content.add_child(_button("VIEW PLAYER MILESTONES", func(): _open_profile_section("milestones"), _theme_color(), 56))
         content.add_child(_button("VIEW GAME COLLECTION", func(): game_collection_page(), PANEL2, 56))
-    if profile_section in ["frames", "collection", "badges", "titles"]:
+    if profile_section in ["frames", "collection", "badges", "titles", "banners", "decorations", "identity", "name_styles"]:
         content.add_child(_button("BACK TO CUSTOMIZATION", func(): _open_profile_section("customize"), PANEL2, 52))
     if profile_section == "milestones":
         content.add_child(_button("BACK TO PLAYER PROGRESS", func(): _open_profile_section("progress"), PANEL2, 52))
@@ -1299,6 +1679,104 @@ func player_profile() -> void:
             _profile_progress_panel()
             _card("OVERALL PERFORMANCE", "Rounds played: %d\nLevels cleared: %d\nWin rate: %s\nFavorite game: %s" % [total_games_played, total_wins, _stat_rate(total_wins, total_games_played), _profile_favorite()])
             _card("COLLECTION & REWARDS", "Achievements: %d / %d\nBest stars earned: %d / 30\nThemes owned: %d / %d\nAvatars owned: %d / %d\nVictory effects owned: %d / %d\nDaily login claims: %d" % [unlocked_achievements, ACHIEVEMENT_INFO.size(), total_stars, owned_themes.size(), SHOP_THEMES.size(), owned_avatars.size(), SHOP_AVATARS.size(), owned_effects.size(), SHOP_EFFECTS.size(), login_total_claims])
+    if profile_section == "name_styles":
+        _heading("Name Styles", "Change the color and symbol next to your player name on Home.")
+        _card("CURRENT NAMEPLATE", _styled_player_name())
+        if name_style_notice != "":
+            _card("NAME STYLE UPDATE", name_style_notice)
+        for style_item in NAME_STYLES:
+            var style_id: String = str(style_item["id"])
+            var style_name: String = str(style_item["name"])
+            var style_owned: bool = _name_style_owned(style_item)
+            var status: String = "EQUIPPED" if equipped_name_style == style_id else ("OWNED" if style_owned else ("LEVEL %d" % int(style_item["level_required"]) if int(style_item.get("level_required", 0)) > 0 else "%d COINS" % int(style_item.get("price", 0))))
+            _card(str(style_item["symbol"]) + "  " + style_name.to_upper() + "  •  " + status, str(style_item["description"]))
+            if equipped_name_style != style_id:
+                content.add_child(_button(("EQUIP " if style_owned else "UNLOCK ") + style_name.to_upper(), func(): _choose_name_style(style_id), Color(str(style_item["color"])).darkened(0.3), 48))
+        content.add_child(_button("VIEW ON HOME", home, PANEL2, 52))
+    if profile_section == "identity":
+        _heading("Player Identity", "Make your Home avatar card feel like yours.")
+        _card("LIVE IDENTITY", custom_player_name + "\n" + custom_player_motto)
+        if identity_edit_notice != "":
+            _card("UPDATE", identity_edit_notice)
+        var name_label := Label.new()
+        name_label.text = "PLAYER NAME (MAX 18 CHARACTERS)"
+        name_label.add_theme_font_size_override("font_size", 17)
+        content.add_child(name_label)
+        var name_input := LineEdit.new()
+        name_input.text = custom_player_name
+        name_input.max_length = 18
+        name_input.custom_minimum_size.y = 52
+        content.add_child(name_input)
+        var motto_label := Label.new()
+        motto_label.text = "PROFILE MOTTO (MAX 48 CHARACTERS)"
+        motto_label.add_theme_font_size_override("font_size", 17)
+        content.add_child(motto_label)
+        var motto_input := LineEdit.new()
+        motto_input.text = custom_player_motto
+        motto_input.max_length = 48
+        motto_input.custom_minimum_size.y = 52
+        content.add_child(motto_input)
+        content.add_child(_button("SAVE NAME & MOTTO", func(): _save_player_identity(name_input.text, motto_input.text), _theme_color(), 56))
+        content.add_child(_button("VIEW ON HOME", home, PANEL2, 52))
+    if profile_section == "decorations":
+        _heading("Banner Decorations", "Choose an accent for your Home avatar banner.")
+        _card("YOUR CURRENT LOOK", _decorated_banner_title())
+        if banner_decoration_notice != "":
+            _card("DECORATION UPDATE", banner_decoration_notice)
+        for decoration in BANNER_DECORATIONS:
+            var decoration_id: String = str(decoration["id"])
+            var decoration_name: String = str(decoration["name"])
+            var decoration_owned: bool = _banner_decoration_owned(decoration)
+            var decoration_status: String = "EQUIPPED" if equipped_banner_decoration == decoration_id else ("OWNED" if decoration_owned else ("LEVEL %d" % int(decoration["level_required"]) if int(decoration.get("level_required", 0)) > 0 else "%d COINS" % int(decoration.get("price", 0))))
+            _card(str(decoration.get("symbol", "")) + "  " + decoration_name.to_upper() + "  •  " + decoration_status, str(decoration["description"]))
+            if equipped_banner_decoration != decoration_id:
+                content.add_child(_button(("EQUIP " if decoration_owned else "UNLOCK ") + decoration_name.to_upper(), func(): _choose_banner_decoration(decoration_id), _theme_color(), 48))
+        content.add_child(_button("VIEW ON HOME", home, PANEL2, 52))
+    if profile_section == "showcase":
+        _heading("Featured Showcase", "Feature an earned badge and one favorite game on your Home avatar banner.")
+        _card("FEATURED MINI-GAME", "Your chosen game and personal best appear on Home and Profile.")
+        content.add_child(_showcase_game_label())
+        if showcased_game != "none":
+            content.add_child(_button("CLEAR FEATURED GAME", func(): _choose_showcase_game("none"), PANEL2, 48))
+        for g in GAMES:
+            var featured_game_id: String = str(g.id)
+            var game_selected: bool = showcased_game == featured_game_id
+            var plays: int = int(game_play_counts.get(featured_game_id, 0))
+            var score: int = int(best_scores.get(featured_game_id, 0))
+            _card(str(g.title).to_upper() + ("  •  FEATURED" if game_selected else ""), "%s  •  %d plays  •  Best %d" % [str(g.genre), plays, score])
+            if not game_selected:
+                content.add_child(_button("FEATURE " + str(g.title).to_upper(), func(): _choose_showcase_game(featured_game_id), _theme_color(), 48))
+        _heading("Featured Badge", "Show an earned badge alongside your featured game.")
+        content.add_child(_showcase_label())
+        if showcase_notice != "":
+            _card("SHOWCASE UPDATE", showcase_notice)
+        if showcased_badge != "none":
+            content.add_child(_button("CLEAR SHOWCASE", func(): _choose_showcase_badge("none"), PANEL2, 48))
+        for badge in PROFILE_BADGES:
+            var badge_id: String = str(badge["id"])
+            var unlocked: bool = _badge_unlocked(badge_id)
+            var selected: bool = showcased_badge == badge_id
+            var status: String = "FEATURED" if selected else ("EARNED" if unlocked else "LOCKED")
+            _card("%s  %s  •  %s" % [str(badge["symbol"]), str(badge["name"]), status], str(badge["requirement"]))
+            if unlocked and not selected:
+                content.add_child(_button("FEATURE " + str(badge["name"]).to_upper(), func(): _choose_showcase_badge(badge_id), Color(str(badge["color"])), 48))
+        content.add_child(_button("VIEW ON HOME", home, PANEL2, 52))
+    if profile_section == "banners":
+        _heading("Profile Banners", "Preview your banner here, then visit Profile Overview to see it full size.")
+        if cosmetic_unlock_message != "":
+            _card("CUSTOMIZATION", cosmetic_unlock_message)
+        _card("CURRENTLY EQUIPPED", _banner_name())
+        content.add_child(_profile_banner_preview(equipped_banner, false))
+        content.add_child(_button("VIEW ON MY PROFILE", func(): _open_profile_section("overview"), PANEL2, 54))
+        for banner in PROFILE_BANNERS:
+            var banner_id: String = str(banner["id"])
+            var banner_name: String = str(banner["name"])
+            var owned: bool = _cosmetic_owned("banner", banner)
+            var status: String = "EQUIPPED" if equipped_banner == banner_id else ("OWNED" if owned else ("LEVEL %d" % int(banner["level_required"]) if int(banner.get("level_required", 0)) > 0 else "%d COINS" % int(banner.get("price", 0))))
+            _card(banner_name.to_upper() + "  •  " + status, str(banner["description"]))
+            content.add_child(_profile_banner_preview(banner_id, false))
+            if equipped_banner != banner_id:
+                content.add_child(_button(("EQUIP " if owned else "UNLOCK ") + banner_name.to_upper(), func(): _equip_banner(banner_id), Color(str(banner["color"])), 54))
     if profile_section == "frames":
         _heading("Avatar Frames", "Unlock decorative borders with coins. Frames are cosmetic only.")
         if frame_notice != "":
@@ -1457,21 +1935,91 @@ func home():
     tagline.add_theme_font_size_override("font_size", 20)
     tagline.add_theme_color_override("font_color", Color("#e4eaff"))
     hero_box.add_child(tagline)
+    # The equipped profile banner is the background of the HOME avatar card.
+    # This is the main visible banner, not a separate decoration on Profile.
     var identity := PanelContainer.new()
-    identity.add_theme_stylebox_override("panel", _lobby_card_style(_theme_color()))
+    var identity_style := _style(_banner_color(), 18)
+    identity_style.border_width_left = 3
+    identity_style.border_width_right = 3
+    identity_style.border_width_top = 3
+    identity_style.border_width_bottom = 3
+    identity_style.border_color = _banner_color().lightened(0.48)
+    identity_style.content_margin_left = 16
+    identity_style.content_margin_right = 16
+    identity_style.content_margin_top = 16
+    identity_style.content_margin_bottom = 16
+    identity.add_theme_stylebox_override("panel", identity_style)
     content.add_child(identity)
+    if banner_animation_enabled:
+        # Animate only the border color; no movement or flashing of the avatar.
+        var banner_tween := create_tween().bind_node(identity)
+        banner_tween.set_loops()
+        banner_tween.set_trans(Tween.TRANS_SINE)
+        banner_tween.tween_property(identity_style, "border_color", _banner_color().lightened(0.78), 2.2)
+        banner_tween.tween_property(identity_style, "border_color", _banner_color().lightened(0.32), 2.2)
+    var identity_stack := VBoxContainer.new()
+    identity_stack.add_theme_constant_override("separation", 10)
+    identity.add_child(identity_stack)
+    var banner_heading := Label.new()
+    banner_heading.text = _decorated_banner_title()
+    banner_heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    banner_heading.add_theme_font_size_override("font_size", 20)
+    banner_heading.add_theme_color_override("font_color", Color.WHITE)
+    identity_stack.add_child(banner_heading)
+    # Compact showcase: badge and favorite game share one subtle row.
+    # Full records remain available in Profile > Customize > Showcase.
+    var showcase_parts: Array[String] = []
+    if showcased_badge != "none" and _badge_unlocked(showcased_badge):
+        var featured_badge: Dictionary = _badge_data(showcased_badge)
+        showcase_parts.append(str(featured_badge["symbol"]) + " " + str(featured_badge["name"]))
+    if showcased_game != "none":
+        var featured_title: String = showcased_game
+        for featured_game in GAMES:
+            if str(featured_game.id) == showcased_game:
+                featured_title = str(featured_game.title)
+                break
+        showcase_parts.append("★ " + featured_title + " · Best " + str(int(best_scores.get(showcased_game, 0))))
+    if not showcase_parts.is_empty():
+        var showcase_strip := PanelContainer.new()
+        showcase_strip.add_theme_stylebox_override("panel", _style(_banner_color().darkened(0.20), 10))
+        identity_stack.add_child(showcase_strip)
+        var showcase_text := Label.new()
+        showcase_text.text = "  •  ".join(showcase_parts)
+        showcase_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+        showcase_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        showcase_text.add_theme_font_size_override("font_size", 14)
+        showcase_text.add_theme_color_override("font_color", Color("#f2f5ff"))
+        showcase_strip.add_child(showcase_text)
+    if banner_animation_enabled:
+        var heading_tween := create_tween().bind_node(banner_heading)
+        heading_tween.set_loops()
+        heading_tween.set_trans(Tween.TRANS_SINE)
+        heading_tween.tween_property(banner_heading, "modulate:a", 0.72, 2.2)
+        heading_tween.tween_property(banner_heading, "modulate:a", 1.0, 2.2)
     var identity_row := HBoxContainer.new()
     identity_row.add_theme_constant_override("separation", 12)
-    identity.add_child(identity_row)
+    identity_stack.add_child(identity_row)
     identity_row.add_child(_framed_avatar(equipped_avatar, 62))
     var identity_text := VBoxContainer.new()
     identity_text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     identity_row.add_child(identity_text)
+    var identity_name := Label.new()
+    identity_name.text = _styled_player_name()
+    identity_name.add_theme_font_size_override("font_size", 21)
+    identity_name.add_theme_color_override("font_color", Color(str(_name_style_data()["color"])))
+    identity_name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    identity_text.add_child(identity_name)
     var player_rank := Label.new()
     player_rank.text = "%s  •  LEVEL %d" % [_player_rank_name(level).to_upper(), level]
     player_rank.add_theme_font_size_override("font_size", 20)
     player_rank.add_theme_color_override("font_color", Color("#ffe29e"))
     identity_text.add_child(player_rank)
+    var identity_motto := Label.new()
+    identity_motto.text = custom_player_motto
+    identity_motto.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    identity_motto.add_theme_font_size_override("font_size", 15)
+    identity_motto.add_theme_color_override("font_color", Color("#e4eaff"))
+    identity_text.add_child(identity_motto)
     identity_text.add_child(_badge_label())
     var progress := ProgressBar.new()
     progress.min_value = 0
@@ -1480,6 +2028,21 @@ func home():
     progress.custom_minimum_size.y = 14
     progress.show_percentage = false
     identity_text.add_child(progress)
+    # Keep banner customization discoverable without competing with the avatar.
+    var banner_actions := HBoxContainer.new()
+    banner_actions.alignment = BoxContainer.ALIGNMENT_END
+    banner_actions.add_theme_constant_override("separation", 6)
+    identity_stack.add_child(banner_actions)
+    var change_banner := _button("Edit banner", func(): _open_profile_section("banners"), _banner_color().darkened(0.25), 36)
+    change_banner.size_flags_horizontal = Control.SIZE_SHRINK_END
+    change_banner.custom_minimum_size = Vector2(112, 38)
+    change_banner.add_theme_font_size_override("font_size", 14)
+    banner_actions.add_child(change_banner)
+    var decorate_banner := _button("Decor", func(): _open_profile_section("decorations"), _banner_color().darkened(0.28), 36)
+    decorate_banner.size_flags_horizontal = Control.SIZE_SHRINK_END
+    decorate_banner.custom_minimum_size = Vector2(74, 38)
+    decorate_banner.add_theme_font_size_override("font_size", 14)
+    banner_actions.add_child(decorate_banner)
     content.add_child(_menu_button("PLAY A RANDOM GAME", _random_game, Color("#36e58a"), "play", 60))
     _card("TODAY'S FEATURED GAME", _daily_feature_description())
     content.add_child(_menu_button("PLAY DAILY CHALLENGE", _daily_challenge, Color("#fbbf24"), "daily", 58))
@@ -1829,6 +2392,8 @@ func _settings_page(section: String) -> void:
 
 func _settings_toggle(option: String) -> void:
     match option:
+        "banner_animation":
+            banner_animation_enabled = not banner_animation_enabled
         "glow":
             show_background_glow = not show_background_glow
         "compact":
@@ -1857,15 +2422,33 @@ func settings():
     content.add_child(_button("BACK TO SETTINGS", func(): _settings_page("home"), PANEL2, 52))
     if settings_section == "appearance":
         _heading("Appearance", "Choose how MiniVerse looks and feels.")
+        _card("MENU BACKGROUND", "Currently: %s. Pick a color atmosphere for every menu." % _background_name())
+        content.add_child(_button("CHOOSE MENU BACKGROUND", func(): _settings_page("backgrounds"), _theme_color()))
+
         _card("BACKGROUND GLOW", "Decorative corner lighting behind menus.")
         content.add_child(_button("BACKGROUND GLOW: ON" if show_background_glow else "BACKGROUND GLOW: OFF", func(): _settings_toggle("glow"), _theme_color()))
         _card("MENU SPACING", "Compact mode fits more items on screen with smaller gaps.")
         content.add_child(_button("COMPACT MENUS: ON" if compact_menus else "COMPACT MENUS: OFF", func(): _settings_toggle("compact"), _theme_color()))
+        _card("ANIMATED AVATAR BANNER", "Subtle, gently pulsing highlights on your Home avatar banner. Disable for a still design.")
+        content.add_child(_button("BANNER ANIMATION: ON" if banner_animation_enabled else "BANNER ANIMATION: OFF", func(): _settings_toggle("banner_animation"), _theme_color()))
         _card("HEADER TAGLINE", "Show or hide the MiniVerse slogan beneath the logo.")
         content.add_child(_button("HEADER TAGLINE: ON" if show_header_tagline else "HEADER TAGLINE: OFF", func(): _settings_toggle("tagline"), _theme_color()))
         _card("YOUR LOOK", "Themes, avatars and victory effects can be equipped in the Shop. Frames, titles and badges live in Profile.")
         content.add_child(_button("OPEN COSMETIC SHOP", func(): _open_shop_category("home"), Color("#344a9b")))
         content.add_child(_button("CUSTOMIZE PROFILE", func(): _open_profile_section("customize"), Color("#344a9b")))
+    elif settings_section == "backgrounds":
+        _heading("Menu Backgrounds", "Free choices plus rewards for coins and player levels.")
+        if cosmetic_unlock_message != "":
+            _card("CUSTOMIZATION", cosmetic_unlock_message)
+        for background_item in MENU_BACKGROUNDS:
+            var bg_id: String = str(background_item["id"])
+            var bg_name: String = str(background_item["name"])
+            var owned: bool = _cosmetic_owned("background", background_item)
+            var status: String = "EQUIPPED" if equipped_background == bg_id else ("OWNED" if owned else ("LEVEL %d" % int(background_item["level_required"]) if int(background_item.get("level_required", 0)) > 0 else "%d COINS" % int(background_item.get("price", 0))))
+            _card(bg_name.to_upper() + "  •  " + status, str(background_item["description"]))
+            if equipped_background != bg_id:
+                content.add_child(_button(("USE " if owned else "UNLOCK ") + bg_name.to_upper(), func(): _equip_background(bg_id), Color(str(background_item["color"])).lightened(0.24), 54))
+        content.add_child(_button("BACK TO APPEARANCE", func(): _settings_page("appearance"), PANEL2, 52))
     elif settings_section == "audio":
         _heading("Audio", "Choose whether game and menu sounds play.")
         content.add_child(_button("SOUND EFFECTS: ON" if sound_enabled else "SOUND EFFECTS: OFF", _toggle_sound, _theme_color()))
@@ -3067,7 +3650,7 @@ func _save():
     _grant_milestone_cosmetics()
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"xp_curve_version":2,"last_rewarded_level":last_rewarded_level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"favorite_games":favorite_games,"discovery_rewards_claimed":discovery_rewards_claimed,"collection_milestones_claimed":collection_milestones_claimed,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"show_background_glow":show_background_glow,"compact_menus":compact_menus,"show_header_tagline":show_header_tagline,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_avatar_frames":owned_avatar_frames,"equipped_avatar_frame":equipped_avatar_frame,"equipped_profile_badge":equipped_profile_badge,"cosmetic_rewards_claimed":cosmetic_rewards_claimed,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day,"daily_feature_reward_day":daily_feature_reward_day,"daily_feature_history":daily_feature_history}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"xp_curve_version":2,"last_rewarded_level":last_rewarded_level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"favorite_games":favorite_games,"discovery_rewards_claimed":discovery_rewards_claimed,"collection_milestones_claimed":collection_milestones_claimed,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"show_background_glow":show_background_glow,"compact_menus":compact_menus,"show_header_tagline":show_header_tagline,"equipped_background":equipped_background,"equipped_banner":equipped_banner,"equipped_banner_decoration":equipped_banner_decoration,"custom_player_name":custom_player_name,"custom_player_motto":custom_player_motto,"equipped_name_style":equipped_name_style,"showcased_badge":showcased_badge,"showcased_game":showcased_game,"owned_name_styles":owned_name_styles,"owned_banner_decorations":owned_banner_decorations,"banner_animation_enabled":banner_animation_enabled,"owned_backgrounds":owned_backgrounds,"owned_banners":owned_banners,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_avatar_frames":owned_avatar_frames,"equipped_avatar_frame":equipped_avatar_frame,"equipped_profile_badge":equipped_profile_badge,"cosmetic_rewards_claimed":cosmetic_rewards_claimed,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day,"daily_feature_reward_day":daily_feature_reward_day,"daily_feature_history":daily_feature_history}))
         f.close()
 
 func _load_save():
@@ -3100,6 +3683,47 @@ func _load_save():
         show_background_glow = bool(data.get("show_background_glow", true))
         compact_menus = bool(data.get("compact_menus", false))
         show_header_tagline = bool(data.get("show_header_tagline", true))
+        equipped_background = str(data.get("equipped_background", "midnight"))
+        equipped_banner = str(data.get("equipped_banner", "starlight"))
+        equipped_banner_decoration = str(data.get("equipped_banner_decoration", "sparkles"))
+        custom_player_name = str(data.get("custom_player_name", "Player")).strip_edges().substr(0, 18)
+        if custom_player_name.is_empty():
+            custom_player_name = "Player"
+        custom_player_motto = str(data.get("custom_player_motto", "Small games. Big fun."))
+        equipped_name_style = str(data.get("equipped_name_style", "classic"))
+        showcased_badge = str(data.get("showcased_badge", "none"))
+        showcased_game = str(data.get("showcased_game", "none"))
+        if showcased_game != "none":
+            var valid_showcase_game: bool = false
+            for g in GAMES:
+                if str(g.id) == showcased_game:
+                    valid_showcase_game = true
+                    break
+            if not valid_showcase_game:
+                showcased_game = "none"
+        if not ["none", "rookie", "explorer", "collector", "champion", "veteran", "legend"].has(showcased_badge):
+            showcased_badge = "none"
+        owned_name_styles = data.get("owned_name_styles", {})
+        if typeof(owned_name_styles) != TYPE_DICTIONARY:
+            owned_name_styles = {}
+        if not ["classic", "sky", "rose", "mint", "gold", "royal", "legend"].has(equipped_name_style):
+            equipped_name_style = "classic".strip_edges().substr(0, 48)
+        owned_banner_decorations = data.get("owned_banner_decorations", {})
+        if typeof(owned_banner_decorations) != TYPE_DICTIONARY:
+            owned_banner_decorations = {}
+        if not ["none", "sparkles", "hearts", "crown", "diamonds", "stars", "laurel"].has(equipped_banner_decoration):
+            equipped_banner_decoration = "sparkles"
+        banner_animation_enabled = bool(data.get("banner_animation_enabled", true))
+        owned_backgrounds = data.get("owned_backgrounds", {})
+        owned_banners = data.get("owned_banners", {})
+        if typeof(owned_backgrounds) != TYPE_DICTIONARY:
+            owned_backgrounds = {}
+        if typeof(owned_banners) != TYPE_DICTIONARY:
+            owned_banners = {}
+        if not ["midnight", "nebula", "ocean", "forest", "sunset", "galaxy", "lava", "ice", "gold"].has(equipped_background):
+            equipped_background = "midnight"
+        if not ["starlight", "aurora", "royal", "ember", "prism", "champion", "explorer", "legend"].has(equipped_banner):
+            equipped_banner = "starlight"
         coins = int(data.get("coins",0))
         xp = int(data.get("xp",0))
         level = int(data.get("level",1))
