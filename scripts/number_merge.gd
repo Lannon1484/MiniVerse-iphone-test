@@ -45,7 +45,7 @@ func _new_board():
     root.add_theme_constant_override("separation",10)
     add_child(root)
     var title := Label.new()
-    title.text="NUMBER MERGE"; title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; title.add_theme_font_size_override("font_size",25); title.add_theme_color_override("font_color",Color("#8ce9d8"))
+    title.text="NUMBER MERGE"; title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; title.add_theme_font_size_override("font_size",25); title.add_theme_color_override("font_color",Color("#ffe19a"))
     root.add_child(title)
     var desc := Label.new()
     desc.text="Tap a tile, then an adjacent matching tile to merge."
@@ -58,7 +58,7 @@ func _new_board():
     stats.add_child(score_label); stats.add_child(moves_label)
     var board_panel := PanelContainer.new()
     board_panel.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    board_panel.add_theme_stylebox_override("panel", _tile_style(Color("#51468f")))
+    board_panel.add_theme_stylebox_override("panel", _tile_style(Color("#32216e")))
     root.add_child(board_panel)
     grid=GridContainer.new(); grid.columns=N; grid.size_flags_vertical=Control.SIZE_EXPAND_FILL; grid.size_flags_horizontal=Control.SIZE_EXPAND_FILL
     grid.add_theme_constant_override("h_separation",8); grid.add_theme_constant_override("v_separation",8); board_panel.add_child(grid)
@@ -87,10 +87,11 @@ func _refresh():
             var v: int=board[y][x]
             var b:=Button.new(); b.text="" if v==0 else str(v); b.custom_minimum_size=Vector2(50,70)
             b.size_flags_horizontal=Control.SIZE_EXPAND_FILL; b.size_flags_vertical=Control.SIZE_EXPAND_FILL
-            b.add_theme_font_size_override("font_size",30)
-            b.add_theme_color_override("font_color",Color("#17172b"))
+            b.add_theme_font_size_override("font_size",34)
+            b.add_theme_color_override("font_color",Color("#32145c"))
+            b.add_theme_color_override("font_shadow_color", Color("#ffffff", 0.4))
             var tile_color := _tile_color(v)
-            if selected == Vector2i(x,y): tile_color = Color("#fbbf24")
+            if selected == Vector2i(x,y): tile_color = Color("#fff1a1")
             b.add_theme_stylebox_override("normal",_tile_style(tile_color))
             b.add_theme_stylebox_override("hover",_tile_style(tile_color.lightened(0.12)))
             b.add_theme_stylebox_override("pressed",_tile_style(tile_color.darkened(0.08)))
@@ -120,8 +121,8 @@ func _tile_color(v: int) -> Color:
 func _tile_style(c: Color) -> StyleBoxFlat:
     var s:=StyleBoxFlat.new(); s.bg_color=c; s.corner_radius_top_left=20; s.corner_radius_top_right=20; s.corner_radius_bottom_left=20; s.corner_radius_bottom_right=20
     s.content_margin_left=5; s.content_margin_right=5; s.content_margin_top=5; s.content_margin_bottom=5
-    s.border_width_left=3; s.border_width_right=3; s.border_width_top=3; s.border_width_bottom=3; s.border_color=Color("#ffffff",0.72)
-    s.shadow_color=Color("#10162e",0.5); s.shadow_size=5; s.shadow_offset=Vector2(0,4)
+    s.border_width_left=5; s.border_width_right=5; s.border_width_top=5; s.border_width_bottom=5; s.border_color=Color("#ffda74")
+    s.shadow_color=Color("#5724c2",0.85); s.shadow_size=10; s.shadow_offset=Vector2(0,5)
     return s
 
 func _press(x: int,y: int):

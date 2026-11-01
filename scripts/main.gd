@@ -517,6 +517,7 @@ func _rewards_hub() -> void:
     _weekly_reset_if_needed()
     _shell()
     _heading("Rewards Hub", "Your challenges, rewards, and daily login in one place.")
+    _fantasy_feature_art("fantasy_rewards_header", "MAGICAL REWARDS AWAIT")
     if level_up_notice != "":
         _card("LEVEL-UP REWARD!", level_up_notice)
         level_up_notice = ""
@@ -553,9 +554,21 @@ func _login_rewards_page() -> void:
     content.add_child(_menu_button("BACK TO REWARDS", _rewards_hub, PANEL2, "back"))
 
 
+func _fantasy_nav_style(selected: bool) -> StyleBoxFlat:
+    var style := _style(Color("#5831a2") if selected else Color("#1d285d"), 14)
+    style.border_width_left = 2
+    style.border_width_right = 2
+    style.border_width_top = 2
+    style.border_width_bottom = 3
+    style.border_color = Color("#ffd66e") if selected else Color("#677bc5")
+    style.shadow_color = Color("#09072b", 0.60)
+    style.shadow_size = 3
+    return style
+
+
 func _bottom_navigation(root: VBoxContainer) -> void:
     var separator := ColorRect.new()
-    separator.color = _theme_color().darkened(0.3)
+    separator.color = Color("#ffd36e")
     separator.custom_minimum_size.y = 2
     root.add_child(separator)
     var bar := HBoxContainer.new()
@@ -587,9 +600,9 @@ func _bottom_navigation(root: VBoxContainer) -> void:
         button.add_theme_color_override("font_color", _button_text_color(nav_bg))
         button.add_theme_color_override("font_hover_color", _button_text_color(_theme_color().darkened(0.18)))
         button.add_theme_color_override("font_pressed_color", _button_text_color(_theme_color().darkened(0.42)))
-        button.add_theme_stylebox_override("normal", _style(_theme_color().darkened(0.32) if selected else PANEL2, 10))
-        button.add_theme_stylebox_override("hover", _style(_theme_color().darkened(0.18), 10))
-        button.add_theme_stylebox_override("pressed", _style(_theme_color().darkened(0.42), 10))
+        button.add_theme_stylebox_override("normal", _fantasy_nav_style(selected))
+        button.add_theme_stylebox_override("hover", _fantasy_nav_style(true))
+        button.add_theme_stylebox_override("pressed", _fantasy_nav_style(true))
         button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
         button.custom_minimum_size.y = 94
         button.pressed.connect(func():
@@ -616,6 +629,30 @@ func _section_chips(options: Array[String], selected: String, callback: Callable
         chips.add_child(chip)
 
 
+# Phase 30.1: user-supplied fantasy banner visual language.
+const FANTASY_BRAND_BANNER = preload("res://assets/lobby/fantasy_brand_banner.png")
+const FANTASY_MENU_BACKDROP = preload("res://assets/lobby/fantasy_menu_backdrop.png")
+
+func _fantasy_section_art() -> void:
+    var frame := PanelContainer.new()
+    var frame_style := _style(Color("#141d4a"), 17)
+    frame_style.border_width_left = 2
+    frame_style.border_width_right = 2
+    frame_style.border_width_top = 2
+    frame_style.border_width_bottom = 3
+    frame_style.border_color = Color("#f5c76a")
+    frame.add_theme_stylebox_override("panel", frame_style)
+    content.add_child(frame)
+    var illustration := TextureRect.new()
+    illustration.texture = FANTASY_BRAND_BANNER
+    illustration.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    illustration.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    illustration.custom_minimum_size.y = maxf(220.0, (get_viewport_rect().size.x - 42.0) * 368.0 / 491.0)
+    illustration.clip_contents = true
+    illustration.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    frame.add_child(illustration)
+
+
 func _shell():
     tutorial_overlay = null
     lobby_touch_scrolling = true
@@ -626,6 +663,19 @@ func _shell():
     bg.color = _background_color().lerp(_theme_color(), 0.06)
     bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     add_child(bg)
+    # Fantasy environment behind translucent, high-contrast menu panels.
+    var fantasy_backdrop := TextureRect.new()
+    fantasy_backdrop.texture = FANTASY_MENU_BACKDROP
+    fantasy_backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    fantasy_backdrop.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+    fantasy_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    fantasy_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(fantasy_backdrop)
+    var backdrop_tint := ColorRect.new()
+    backdrop_tint.color = Color("#17103d", 0.25)
+    backdrop_tint.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    backdrop_tint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(backdrop_tint)
     # Subtle arcade-style corner lights behind the interface.
     for deco in [{"pos": Vector2(-90, 150), "size": Vector2(250, 250), "color": Color(_theme_color(), 0.12)}, {"pos": Vector2(500, 540), "size": Vector2(280, 280), "color": Color("#22d3ee", 0.05)}]:
         var glow := ColorRect.new()
@@ -743,14 +793,14 @@ func _lobby_button_style(color: Color) -> StyleBoxFlat:
     style.border_width_right = 2
     style.border_width_top = 2
     style.border_width_bottom = 3
-    style.border_color = color.lightened(0.35)
-    style.shadow_color = Color("#050922", 0.6)
+    style.border_color = Color("#ffd36e").lerp(color.lightened(0.30), 0.22)
+    style.shadow_color = Color("#0a0639", 0.72)
     style.shadow_size = 5
     style.shadow_offset = Vector2(0, 4)
     return style
 
 func _lobby_card_style(accent: Color) -> StyleBoxFlat:
-    var style := _style(Color("#172858").lerp(_theme_color(), 0.19), 18)
+    var style := _style(Color("#171348").lerp(_theme_color(), 0.10), 18)
     style.content_margin_left = 16
     style.content_margin_right = 16
     style.content_margin_top = 15
@@ -759,7 +809,7 @@ func _lobby_card_style(accent: Color) -> StyleBoxFlat:
     style.border_width_right = 1
     style.border_width_top = 1
     style.border_width_bottom = 2
-    style.border_color = accent.darkened(0.22)
+    style.border_color = Color("#ffd36e").lerp(accent, 0.24)
     style.shadow_color = Color("#030a26", 0.38)
     style.shadow_size = 3
     style.shadow_offset = Vector2(0, 3)
@@ -807,6 +857,23 @@ func _button(text: String, cb: Callable, color := ACCENT, height := 56) -> Butto
     )
     TouchFeedback.attach(b)
     return b
+
+func _fantasy_shortcut(asset_name: String, cb: Callable) -> TextureButton:
+    var button := TextureButton.new()
+    button.texture_normal = load("res://assets/lobby/concept_shortcut_%s.png" % asset_name)
+    button.texture_hover = button.texture_normal
+    button.texture_pressed = button.texture_normal
+    button.ignore_texture_size = true
+    button.stretch_mode = TextureButton.STRETCH_KEEP_ASPECT_CENTERED
+    button.custom_minimum_size = Vector2(0, 98)
+    button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    button.mouse_filter = Control.MOUSE_FILTER_PASS
+    button.pressed.connect(func():
+        _play_sound(SFX_TAP)
+        cb.call()
+    )
+    return button
+
 
 func _menu_button(label: String, cb: Callable, color: Color, icon_name: String, height: int = 56) -> Button:
     var button := _button(label, cb, color, height)
@@ -1248,6 +1315,7 @@ func shop() -> void:
     current_tab = "shop"
     _shell()
     _heading("Cosmetic Shop", "Find a look you love. Cosmetics never affect gameplay.")
+    _fantasy_feature_art("fantasy_shop_header", "TREASURES OF MINIVERSE")
     _card("YOUR WALLET", "%d coins  •  Purchases save automatically." % coins)
     if shop_message != "":
         _card("SHOP UPDATE", shop_message)
@@ -1353,6 +1421,19 @@ func shop() -> void:
             effect_column.add_child(effect_button)
 
 
+func _fantasy_feature_art(asset_name: String, _caption: String) -> void:
+    # Full-width illustrated banners with their captions already in the artwork.
+    # Keep aspect ratio and avoid STRETCH_KEEP_ASPECT_COVERED double cropping.
+    var picture := TextureRect.new()
+    picture.texture = load("res://assets/lobby/%s.png" % asset_name)
+    picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    picture.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    picture.custom_minimum_size.y = maxf(84.0, (get_viewport_rect().size.x - 40.0) * 0.169)
+    picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    content.add_child(picture)
+
+
 func _heading(title: String, subtitle := ""):
     var box := VBoxContainer.new()
     box.add_theme_constant_override("separation", 4)
@@ -1360,7 +1441,10 @@ func _heading(title: String, subtitle := ""):
     var t := Label.new()
     t.text = title
     t.add_theme_font_size_override("font_size", 30)
-    t.add_theme_color_override("font_color", _menu_accent_text(_theme_color()))
+    t.add_theme_color_override("font_color", Color("#ffe39c"))
+    t.add_theme_color_override("font_shadow_color", Color("#09062b"))
+    t.add_theme_constant_override("shadow_offset_x", 1)
+    t.add_theme_constant_override("shadow_offset_y", 2)
     box.add_child(t)
     if subtitle != "":
         var s := Label.new()
@@ -1929,6 +2013,7 @@ func player_profile() -> void:
     current_tab = "profile"
     _shell()
     _heading("Player Profile", "Your MiniVerse journey, all in one place.")
+    _fantasy_feature_art("fantasy_profile_header", "YOUR ADVENTURE, YOUR LEGACY")
     # Large banner with a contrasting border and prominent title.
     content.add_child(_profile_banner_preview(equipped_banner, true))
     if showcased_badge != "none" and _badge_unlocked(showcased_badge):
@@ -2266,15 +2351,28 @@ func home():
     # Phase 26: a short, actionable dashboard instead of a long stack of cards.
     var hero := PanelContainer.new()
     var hero_style := StyleBoxFlat.new()
-    hero_style.bg_color = _theme_color().darkened(0.32)
+    hero_style.bg_color = Color("#211653")
+    hero_style.border_width_left = 3
+    hero_style.border_width_right = 3
+    hero_style.border_width_top = 3
+    hero_style.border_width_bottom = 3
+    hero_style.border_color = Color("#ffd36e")
+    hero_style.corner_radius_top_left = 18
+    hero_style.corner_radius_top_right = 18
+    hero_style.corner_radius_bottom_left = 18
+    hero_style.corner_radius_bottom_right = 18
     hero.add_theme_stylebox_override("panel", hero_style)
     content.add_child(hero)
     var hero_box := VBoxContainer.new()
     hero_box.add_theme_constant_override("separation", 4)
     hero.add_child(hero_box)
-    var art := HomeHero.new()
+    var art := TextureRect.new()
+    art.texture = FANTASY_BRAND_BANNER
+    art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
     art.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    art.custom_minimum_size.y = 95
+    art.custom_minimum_size.y = maxf(220.0, (get_viewport_rect().size.x - 42.0) * 368.0 / 491.0)
+    art.mouse_filter = Control.MOUSE_FILTER_IGNORE
     hero_box.add_child(art)
     var tagline := Label.new()
     tagline.text = "SMALL GAMES. BIG FUN."
@@ -2282,6 +2380,13 @@ func home():
     tagline.add_theme_font_size_override("font_size", 20)
     tagline.add_theme_color_override("font_color", Color("#e4eaff"))
     hero_box.add_child(tagline)
+    # Phase 30.3: large, illustrated navigation tiles from the concept art.
+    var fantasy_actions := HBoxContainer.new()
+    fantasy_actions.add_theme_constant_override("separation", 6)
+    content.add_child(fantasy_actions)
+    fantasy_actions.add_child(_fantasy_shortcut("games", library))
+    fantasy_actions.add_child(_fantasy_shortcut("earn", _rewards_hub))
+    fantasy_actions.add_child(_fantasy_shortcut("shop", shop))
     # The equipped profile banner is the background of the HOME avatar card.
     # This is the main visible banner, not a separate decoration on Profile.
     var identity := PanelContainer.new()
@@ -2432,8 +2537,21 @@ func _game_card(g: Dictionary) -> PanelContainer:
     var card := PanelContainer.new()
     card.add_theme_stylebox_override("panel", _lobby_card_style(g.color))
     var column := VBoxContainer.new()
-    column.add_theme_constant_override("separation", 12)
+    column.add_theme_constant_override("separation", 7)
     card.add_child(column)
+
+    # Full illustration in a wide, framed card image. The art is precomposed
+    # into a panoramic canvas so COVERED never zooms into a tiny detail.
+    var art := TextureRect.new()
+    art.texture = load("res://assets/lobby/wide_card_%s.png" % str(g.id))
+    art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    art.custom_minimum_size = Vector2(0, 105)
+    art.size_flags_stretch_ratio = 1.0
+    art.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    art.clip_contents = true
+    art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    column.add_child(art)
 
     var top := HBoxContainer.new()
     top.add_theme_constant_override("separation", 14)
@@ -2441,7 +2559,7 @@ func _game_card(g: Dictionary) -> PanelContainer:
     var preview := GamePreview.new()
     preview.game_id = g.id
     preview.accent = g.color
-    preview.custom_minimum_size = Vector2(90, 100)
+    preview.custom_minimum_size = Vector2(72, 78)
     preview.size_flags_vertical = Control.SIZE_SHRINK_CENTER
     top.add_child(preview)
 
@@ -2452,7 +2570,7 @@ func _game_card(g: Dictionary) -> PanelContainer:
     var name := Label.new()
     name.text = str(g.title)
     name.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    name.add_theme_font_size_override("font_size", 23)
+    name.add_theme_font_size_override("font_size", 21)
     name.add_theme_color_override("font_color", TEXT)
     details.add_child(name)
     var genre := Label.new()
@@ -2486,16 +2604,24 @@ func _game_card(g: Dictionary) -> PanelContainer:
     var description := Label.new()
     description.text = str(g.desc)
     description.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    description.add_theme_font_size_override("font_size", 18)
+    description.add_theme_font_size_override("font_size", 17)
     description.add_theme_color_override("font_color", Color("#e4eaff"))
     column.add_child(description)
     var favorite_id: String = str(g.id)
     var is_favorite: bool = bool(favorite_games.get(favorite_id, false))
     var favorite_label: String = "REMOVE FROM FAVORITES" if is_favorite else "ADD TO FAVORITES"
     var favorite_button := _button(favorite_label, func(): _toggle_game_favorite(favorite_id), Color("#344a76"), 52)
-    column.add_child(favorite_button)
-    var play := _button("PLAY " + str(g.title).to_upper(), func(): launch(str(g.id)), g.color, 60)
-    column.add_child(play)
+    var actions := HBoxContainer.new()
+    actions.add_theme_constant_override("separation", 7)
+    column.add_child(actions)
+    favorite_button.text = "♥ FAVORITE" if not is_favorite else "♥ UNFAVORITE"
+    favorite_button.add_theme_font_size_override("font_size", 16)
+    favorite_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    actions.add_child(favorite_button)
+    var play := _button("▶ PLAY", func(): launch(str(g.id)), Color("#fa7098"), 60)
+    play.add_theme_font_size_override("font_size", 19)
+    play.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    actions.add_child(play)
     return card
 
 
@@ -2856,6 +2982,7 @@ func library(restore_scroll: int = -1):
     current_tab = "games"
     _shell()
     _heading("Game Library", "%d mini-games. Choose a category and jump into a game." % GAMES.size())
+    _fantasy_section_art()
 
     # Collection rewards now live on their own page, rather than pushing the
     # game cards far below the fold.
@@ -3208,7 +3335,7 @@ func _show_tutorial(id: String) -> void:
     var panel := PanelContainer.new()
     panel.custom_minimum_size = Vector2(280, 0)
     panel.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-    panel.add_theme_stylebox_override("panel", _style(PANEL, 20))
+    panel.add_theme_stylebox_override("panel", _lobby_card_style(Color("#ffcf67")))
     center.add_child(panel)
     var margins := MarginContainer.new()
     for side in ["left", "right", "top", "bottom"]:
@@ -3237,9 +3364,11 @@ func _show_tutorial(id: String) -> void:
     body.add_child(preview_frame)
     var preview_holder := CenterContainer.new()
     preview_frame.add_child(preview_holder)
-    var preview := GamePreview.new()
-    preview.game_id = id
-    preview.custom_minimum_size = Vector2(212, 116)
+    var preview := TextureRect.new()
+    preview.texture = load("res://assets/lobby/wide_card_%s.png" % id)
+    preview.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    preview.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    preview.custom_minimum_size = Vector2(240, 116)
     preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
     preview_holder.add_child(preview)
     # A gentle motion draws attention to the illustration without obscuring
@@ -3545,19 +3674,52 @@ func _mount_game(g: Control):
     _shell()
     lobby_touch_scrolling = false
     game_root = g
-    # Shared progress header across all ten games.
+    # Shared fantasy gameplay identity for all 13 mini-games.
+    # This sits above the gameplay control, so it cannot obscure touch targets.
+    var adventure_panel := PanelContainer.new()
+    var adventure_style := _lobby_card_style(Color("#ffdc7b"))
+    adventure_style.content_margin_left = 6
+    adventure_style.content_margin_right = 6
+    adventure_style.content_margin_top = 6
+    adventure_style.content_margin_bottom = 6
+    adventure_panel.add_theme_stylebox_override("panel", adventure_style)
+    content.add_child(adventure_panel)
+    var adventure_stack := VBoxContainer.new()
+    adventure_stack.add_theme_constant_override("separation", 5)
+    adventure_panel.add_child(adventure_stack)
+    var adventure_art := TextureRect.new()
+    adventure_art.texture = load("res://assets/lobby/wide_card_%s.png" % game_id)
+    adventure_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    adventure_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    adventure_art.custom_minimum_size.y = 72
+    adventure_art.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    adventure_art.clip_contents = true
+    adventure_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    adventure_stack.add_child(adventure_art)
     var progress_header := Label.new()
-    progress_header.text = "%s  •  LEVEL %d" % [_game_name(game_id).to_upper(), Difficulty.level(game_id)]
+    progress_header.text = "✦  %s  •  LEVEL %d  ✦" % [_game_name(game_id).to_upper(), Difficulty.level(game_id)]
     progress_header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    progress_header.add_theme_font_size_override("font_size", 17)
-    progress_header.add_theme_color_override("font_color", Color("#ffe29e"))
-    content.add_child(progress_header)
+    progress_header.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    progress_header.add_theme_font_size_override("font_size", 19)
+    progress_header.add_theme_color_override("font_color", Color("#ffe39c"))
+    progress_header.add_theme_color_override("font_shadow_color", Color("#09062b"))
+    adventure_stack.add_child(progress_header)
     # Keep a visible way back to the lobby while playing any mini-game.
     content.add_child(_menu_button("RETURN TO LOBBY", home, PANEL2, "back", 46))
     # ScrollContainer content must have a real minimum height; otherwise nested
     # game controls can collapse to almost zero height on mobile-sized viewports.
     g.custom_minimum_size = Vector2(0, 820)
     content.add_child(g)
+    # Each game inherits its own banner's colors and fantasy border.
+    # This decorative layer is behind the gameplay UI and ignores touches.
+    var game_backdrop := TextureRect.new()
+    game_backdrop.texture = load("res://assets/lobby/gameplay_backdrop_%s.png" % game_id)
+    game_backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    game_backdrop.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    game_backdrop.stretch_mode = TextureRect.STRETCH_SCALE
+    game_backdrop.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    game_backdrop.show_behind_parent = true
+    g.add_child(game_backdrop)
     g.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     g.size_flags_vertical = Control.SIZE_EXPAND_FILL
     call_deferred("_attach_gameplay_sparkles", g)
@@ -4159,6 +4321,33 @@ func _play_completed_rhythm_song(played_level: int) -> void:
 func _results(id: String, score: int, reward: int, record: bool, earned_xp: int, stars_earned: int, played_level: int, goal: int, passed: bool):
     _shell()
     _heading("Level Complete!" if passed else "Try Again!", "Level %d • %s" % [played_level, "Goal reached!" if passed else "You can retry this level."])
+    # Show the actual mini-game's fantasy art on its results screen.
+    # Reuse the same image used in the library and gameplay header.
+    var result_art_panel := PanelContainer.new()
+    var result_art_style := _lobby_card_style(Color("#ffd66e") if passed else Color("#9da7ed"))
+    result_art_style.content_margin_left = 5
+    result_art_style.content_margin_right = 5
+    result_art_style.content_margin_top = 5
+    result_art_style.content_margin_bottom = 5
+    result_art_panel.add_theme_stylebox_override("panel", result_art_style)
+    content.add_child(result_art_panel)
+    var result_art_stack := VBoxContainer.new()
+    result_art_stack.add_theme_constant_override("separation", 5)
+    result_art_panel.add_child(result_art_stack)
+    var result_art := TextureRect.new()
+    result_art.texture = load("res://assets/lobby/wide_card_%s.png" % id)
+    result_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    result_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    result_art.custom_minimum_size.y = 96
+    result_art.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    result_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    result_art_stack.add_child(result_art)
+    var result_banner := Label.new()
+    result_banner.text = "✦  VICTORY!  ✦" if passed else "✦  KEEP ADVENTURING!  ✦"
+    result_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    result_banner.add_theme_font_size_override("font_size", 20)
+    result_banner.add_theme_color_override("font_color", Color("#ffe69b") if passed else Color("#c5d8ff"))
+    result_art_stack.add_child(result_banner)
     var mastery_wins: int = int(game_win_counts.get(id, 0))
     for tier in MASTERY_TIERS:
         if passed and mastery_wins == int(tier["wins"]):

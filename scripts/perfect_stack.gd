@@ -15,13 +15,13 @@ var area
 var score_label: Label
 var hint: Label
 var tower: Array[Rect2] = []
-var colors := [Color("#fbbf24"),Color("#f9738f"),Color("#60a5fa"),Color("#86efac"),Color("#c4b5fd")]
+var colors := [Color("#ffdb69"),Color("#ff74bb"),Color("#57d9ff"),Color("#79f4b4"),Color("#b99cff")]
 
 func start_game():
     var root:=VBoxContainer.new()
     root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     root.add_theme_constant_override("separation",10); add_child(root)
-    var title:=Label.new(); title.text="PERFECT STACK"; title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; title.add_theme_font_size_override("font_size",25); title.add_theme_color_override("font_color",Color("#f5f7ff")); root.add_child(title)
+    var title:=Label.new(); title.text="PERFECT STACK"; title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; title.add_theme_font_size_override("font_size",25); title.add_theme_color_override("font_color",Color("#ffe19a")); root.add_child(title)
     var desc:=Label.new(); desc.text="Tap DROP to place each moving block. Keep your tower wide."; desc.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; desc.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; desc.add_theme_color_override("font_color",Color("#aeb8df")); root.add_child(desc)
     score_label=Label.new(); score_label.text="HEIGHT 0"; score_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER; score_label.add_theme_font_size_override("font_size",20); score_label.add_theme_color_override("font_color",Color("#fbbf24")); root.add_child(score_label)
     area=StackPlayfield.new(); area.name="StackPlayfield"; area.size_flags_horizontal=Control.SIZE_EXPAND_FILL; area.size_flags_vertical=Control.SIZE_EXPAND_FILL; area.custom_minimum_size=Vector2(280, 400); area.clip_contents=true; root.add_child(area)

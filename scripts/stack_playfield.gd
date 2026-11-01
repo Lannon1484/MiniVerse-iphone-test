@@ -27,8 +27,13 @@ func _draw() -> void:
     if w <= 1.0 or h <= 1.0:
         return
     # Whimsical illustrated sky and floating islands.
-    draw_rect(Rect2(Vector2.ZERO, size), Color("#6c9be8"), true)
-    draw_rect(Rect2(Vector2(0, h * 0.59), Vector2(w, h * 0.41)), Color("#b4a0f3"), true)
+    draw_rect(Rect2(Vector2.ZERO, size), Color("#3c3fae"), true)
+    draw_rect(Rect2(Vector2(0, h * 0.54), Vector2(w, h * 0.46)), Color("#9770d7"), true)
+    # Twinkling magic particles: deterministic positions, no per-frame randomness.
+    for star_index in range(22):
+        var sx: float = fposmod(19.0 + float(star_index) * 79.0, w)
+        var sy: float = fposmod(27.0 + float(star_index * 37), h * 0.66)
+        draw_circle(Vector2(sx, sy), 1.5 + float(star_index % 3), Color("#fff3c2", 0.72))
     draw_circle(Vector2(w * 0.78, h * 0.16), 35.0, Color("#ffe5a3"))
     for i in range(6):
         var cx: float = fposmod(28.0 + float(i) * 143.0, w)
@@ -49,7 +54,11 @@ func _draw() -> void:
         draw_rect(drawn, colors[i % colors.size()], true)
         draw_rect(Rect2(drawn.position + Vector2(3, 5), Vector2(maxf(0.0, drawn.size.x - 6.0), 6)), Color("#ffffff", 0.4), true)
         draw_rect(Rect2(drawn.position, Vector2(drawn.size.x, 4.0)), Color("#ffffff", 0.58), true)
-        draw_rect(drawn, Color("#ffffff", 0.82), false, 2.0)
+        draw_rect(drawn, Color("#ffdf8a"), false, 3.0)
+        # Faceted luminous side and upper-edge highlights.
+        draw_rect(Rect2(drawn.position + Vector2(maxf(0.0, drawn.size.x - 12.0), 5), Vector2(7, maxf(0.0, drawn.size.y - 10.0))), Color("#2c176a", 0.25), true)
+        draw_rect(Rect2(drawn.position + Vector2(7, 2), Vector2(maxf(0.0, drawn.size.x - 14.0), 3)), Color("#ffffff", 0.80), true)
+        draw_rect(Rect2(drawn.position + Vector2(4, 9), Vector2(maxf(0.0, drawn.size.x - 8.0), 3)), Color("#ffffff", 0.50), true)
     if running and not tower.is_empty():
         var y: float = h - block_height - 10.0 - float(tower.size()) * block_height
         var moving := Rect2(Vector2(moving_x, y), Vector2(moving_width, block_height))
@@ -57,7 +66,8 @@ func _draw() -> void:
         draw_rect(moving, colors[tower.size() % colors.size()], true)
         draw_rect(Rect2(moving.position + Vector2(3, 5), Vector2(maxf(0.0, moving.size.x - 6.0), 6)), Color("#ffffff", 0.45), true)
         draw_rect(Rect2(moving.position, Vector2(moving.size.x, 4.0)), Color("#ffffff", 0.72), true)
-        draw_rect(moving, Color("#ffffff", 0.95), false, 2.0)
+        draw_rect(moving.grow(2.0), Color("#fff0b4", 0.35), false, 3.0)
+        draw_rect(moving, Color("#ffdf8a"), false, 3.0)
     if impact_time > 0.0:
         var progress: float = 1.0 - impact_time / 0.30
         var ring_radius: float = 10.0 + progress * 48.0

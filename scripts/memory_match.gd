@@ -6,7 +6,7 @@ signal finished(game_id: String, score: int, extra: Dictionary)
 
 const Difficulty = preload("res://scripts/difficulty.gd")
 var difficulty_level: int = 1
-const CARD_BACK = preload("res://assets/memory_symbols/card_back.png")
+const CARD_BACK = preload("res://assets/lobby/fantasy_memory_back.png")
 const SYMBOLS := ["star", "heart", "moon", "diamond", "flower", "sun", "rocket", "cloud"]
 const PICTURES := {
     "star": preload("res://assets/memory_symbols/star.png"),
@@ -19,7 +19,7 @@ const PICTURES := {
     "cloud": preload("res://assets/memory_symbols/cloud.png")
 }
 const FACE_COLORS := [Color("#f97373"), Color("#38bdf8"), Color("#fbbf24"), Color("#c084fc"), Color("#34d399"), Color("#fb923c"), Color("#f472b6"), Color("#a3e635")]
-const CARD := Color("#40549a")
+const CARD := Color("#512aa3")
 const ACCENT := Color("#34d399")
 
 var cards: Array[String] = []
@@ -148,9 +148,9 @@ func _card_style(color: Color) -> StyleBoxFlat:
     style.border_width_right = 3
     style.border_width_top = 3
     style.border_width_bottom = 3
-    style.border_color = Color("#e0e7ff")
-    style.corner_radius_top_left = 12; style.corner_radius_top_right = 12
-    style.corner_radius_bottom_left = 12; style.corner_radius_bottom_right = 12
+    style.border_color = Color("#ffdb83")
+    style.corner_radius_top_left = 18; style.corner_radius_top_right = 18
+    style.corner_radius_bottom_left = 18; style.corner_radius_bottom_right = 18
     style.content_margin_top = 5; style.content_margin_bottom = 5
     return style
 

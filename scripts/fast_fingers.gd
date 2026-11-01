@@ -1,7 +1,7 @@
 extends Control
 class_name FastFingers
 const ArcadeField = preload("res://scripts/arcade_field.gd")
-const TARGET_PICTURE = preload("res://assets/classic_games/fast_target.png")
+const TARGET_PICTURE = preload("res://assets/lobby/fantasy_fast_target.png")
 signal finished(game_id: String, score: int, extra: Dictionary)
 signal gameplay_sound(kind: String)
 const Difficulty = preload("res://scripts/difficulty.gd")
@@ -45,7 +45,7 @@ func start_game():
     combo_label = _stat("COMBO 0")
     stats.add_child(timer_label); stats.add_child(score_label); stats.add_child(combo_label)
     area = ArcadeField.new()
-    area.accent = Color("#f9738f")
+    area.accent = Color("#ffb94f")
     area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     area.size_flags_vertical = Control.SIZE_EXPAND_FILL
     area.custom_minimum_size.y = 450

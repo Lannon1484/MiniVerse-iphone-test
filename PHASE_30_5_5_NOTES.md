@@ -1,0 +1,2 @@
+# Phase 30.5.5 - Matching illustrated cards
+Nine new wide illustrated fantasy title banners for Whack-a-Mole, Color Sort, Neon Snake, Connect the Dots, Sky Hopper, Rhythm Rush, Neon Dodge, Tile Slide, Fruit Catch, each composed from the same cohesive concept artwork style as the four original cards. The original four approved images remain unchanged. Card image display uses KEEP_ASPECT_CENTERED rather than COVERED to prevent clipping. Gameplay, progression, save files, favorites and navigation are unchanged. Verify rendering on phone.

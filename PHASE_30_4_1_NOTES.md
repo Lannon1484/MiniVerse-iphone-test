@@ -1,0 +1,1 @@
+Phase 30.4.1: Replaced three zoomed-in banner crops with newly composed wide fantasy illustrations, each with full trophy/chest/crest and embedded caption. Corrected image stretch mode to preserve full artwork. Existing games and saves untouched.
