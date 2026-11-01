@@ -192,7 +192,10 @@ class HopperArena extends Control:
             return
         var scale_factor: float = minf(size.x / WIDTH, size.y / HEIGHT)
         var offset: Vector2 = (size - Vector2(WIDTH, HEIGHT) * scale_factor) * 0.5
-        draw_rect(Rect2(Vector2.ZERO, size), SKY, true)
+        draw_rect(Rect2(Vector2.ZERO, size), Color("#35206f"), true)
+        # Decorative sky glow and a gold-framed arcade playfield.
+        draw_circle(offset + Vector2(WIDTH * 0.75, HEIGHT * 0.22) * scale_factor, 105.0 * scale_factor, Color("#bc76ff", 0.12))
+        draw_rect(Rect2(offset, Vector2(WIDTH, HEIGHT) * scale_factor), Color("#ffd77e", 0.62), false, 3.0)
         for i in range(22):
             var sx: float = fposmod(float(i * 97), WIDTH)
             var sy: float = fposmod(float(i * 167) - g.camera_y * 0.17, HEIGHT)
@@ -203,19 +206,26 @@ class HopperArena extends Control:
                 continue
             var pos: Vector2 = offset + Vector2(platform.x, y) * scale_factor
             draw_rect(Rect2(pos + Vector2(-49, -2) * scale_factor, Vector2(98, 18) * scale_factor), Color("#8762b3"), true)
-            draw_rect(Rect2(pos + Vector2(-49, -7) * scale_factor, Vector2(98, 10) * scale_factor), AQUA, true)
+            draw_rect(Rect2(pos + Vector2(-49, -7) * scale_factor, Vector2(98, 10) * scale_factor), Color("#7bf3e7"), true)
+            draw_line(pos + Vector2(-48, -8) * scale_factor, pos + Vector2(48, -8) * scale_factor, Color("#ffe3a0"), 3.0 * scale_factor)
             draw_circle(pos + Vector2(-35, -9) * scale_factor, 5 * scale_factor, Color("#d3ffe3"))
         for star in g.stars:
             var y: float = star.y - g.camera_y
             if y < -40 or y > HEIGHT + 40:
                 continue
             var pos: Vector2 = offset + Vector2(star.x, y) * scale_factor
-            draw_circle(pos, 13 * scale_factor, Color("#fff3a5", 0.20))
-            draw_circle(pos, 8 * scale_factor, GOLD)
+            var shimmer: float = 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.006 + pos.x * 0.03)
+            draw_circle(pos, (13.0 + shimmer * 5.0) * scale_factor, Color("#fff3a5", 0.15 + shimmer * 0.20))
+            draw_circle(pos, 10 * scale_factor, Color("#ffe5a0"))
+            draw_circle(pos, 7 * scale_factor, GOLD)
             draw_circle(pos + Vector2(-2, -2) * scale_factor, 2 * scale_factor, Color.WHITE)
         var hero: Vector2 = offset + Vector2(g.player.x, g.player.y - g.camera_y) * scale_factor
+        var trail_dir: float = -1.0 if g.velocity.x >= 0.0 else 1.0
+        draw_circle(hero + Vector2(trail_dir * 18.0, 8.0) * scale_factor, 6.0 * scale_factor, Color("#ffe6a8", 0.30))
+        draw_circle(hero + Vector2(trail_dir * 27.0, 12.0) * scale_factor, 3.5 * scale_factor, Color("#b4f8ff", 0.42))
         draw_circle(hero, 18 * scale_factor, Color("#ffa8dd", 0.22))
-        draw_circle(hero, 14 * scale_factor, Color("#ffaddd"))
+        draw_circle(hero, 15 * scale_factor, Color("#ffe3a2"))
+        draw_circle(hero, 12 * scale_factor, Color("#ff8bc9"))
         draw_circle(hero + Vector2(-5, -3) * scale_factor, 2.4 * scale_factor, Color("#213454"))
         draw_circle(hero + Vector2(5, -3) * scale_factor, 2.4 * scale_factor, Color("#213454"))
         draw_arc(hero, 13 * scale_factor, 0, TAU, 32, Color("#ffffff", 0.8), 1.5 * scale_factor)

@@ -135,6 +135,7 @@ func _setup_level() -> void:
 func _refresh() -> void:
     score_label.text = "PUZZLE %d   •   MOVES %d   •   PAIRS %d / 4" % [level + 1, moves, _connected_count()]
     board.paths = paths
+    board.sparkle_time = 0.32
     board.queue_redraw()
 
 func _connected_count() -> int:
@@ -223,6 +224,12 @@ class DotBoard extends Control:
     var paths: Array = []
     var dragging := false
     var last_cell := Vector2i(-1, -1)
+    var sparkle_time: float = 0.0
+
+    func _process(delta: float) -> void:
+        if sparkle_time > 0.0:
+            sparkle_time = maxf(0.0, sparkle_time - delta)
+            queue_redraw()
 
     func _geometry() -> Dictionary:
         var side: float = minf(size.x - 12.0, size.y - 12.0)
@@ -272,21 +279,29 @@ class DotBoard extends Control:
         var g := _geometry()
         var step: float = g.step
         var origin: Vector2 = g.origin
-        draw_rect(Rect2(Vector2.ZERO, size), Color("#11224c"), true)
+        draw_rect(Rect2(Vector2.ZERO, size), Color("#23134e"), true)
+        # Gold-trimmed magical puzzle board.
+        draw_rect(Rect2(Vector2(3, 3), size - Vector2(6, 6)), Color("#f5c975", 0.88), false, 4.0)
+        draw_rect(Rect2(Vector2(10, 10), size - Vector2(20, 20)), Color("#ad7aff", 0.28), false, 2.0)
         for x in range(5):
             for y in range(5):
-                draw_circle(origin + Vector2(x, y) * step, 4.0, Color("#5275a6", 0.65))
+                draw_circle(origin + Vector2(x, y) * step, 5.0, Color("#a788d9", 0.48))
         for i in range(paths.size()):
             var path: Array = paths[i]
             for j in range(1, path.size()):
                 var a: Vector2 = origin + Vector2(path[j - 1]) * step
                 var b: Vector2 = origin + Vector2(path[j]) * step
                 draw_line(a, b, Color(COLORS[i].r, COLORS[i].g, COLORS[i].b, 0.20), 27.0, true)
-                draw_line(a, b, COLORS[i], 13.0, true)
+                draw_line(a, b, Color("#fff0c5", 0.66), 17.0, true)
+                draw_line(a, b, COLORS[i], 12.0, true)
+                draw_line(a, b, Color("#ffffff", 0.48), 3.0, true)
         for i in range(endpoints.size()):
             var p: Array = endpoints[i]
             for c in [Vector2i(p[0], p[1]), Vector2i(p[2], p[3])]:
                 var center: Vector2 = origin + Vector2(c) * step
                 draw_circle(center, 24.0, Color(COLORS[i].r, COLORS[i].g, COLORS[i].b, 0.24))
-                draw_circle(center, 16.0, COLORS[i])
+                draw_circle(center, 19.0, Color("#ffe3a2"))
+                draw_circle(center, 15.0, COLORS[i])
                 draw_circle(center + Vector2(-4, -5), 5.0, Color("#ffffff", 0.82))
+                if sparkle_time > 0.0:
+                    draw_circle(center, 20.0 + (1.0 - sparkle_time) * 9.0, Color("#fff4c6", sparkle_time * 0.40), false, 2.5)

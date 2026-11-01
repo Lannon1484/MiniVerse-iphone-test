@@ -13,7 +13,7 @@ var colors: Array[Color] = [Color("#fbbf24"), Color("#f9738f"), Color("#60a5fa")
 func trigger_drop_effect(block_x: float, block_level: int, tint: Color) -> void:
     impact_position = Vector2(block_x, size.y - block_height - 10.0 - float(block_level) * block_height + block_height * 0.5)
     impact_color = tint
-    impact_time = 0.30
+    impact_time = 0.48
     queue_redraw()
 
 func _process(delta: float) -> void:

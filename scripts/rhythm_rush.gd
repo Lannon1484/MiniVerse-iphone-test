@@ -46,6 +46,8 @@ var arena: BeatBoard
 var stats: Label
 var feedback: Label
 var rng := RandomNumberGenerator.new()
+var hit_flash := 0.0
+var hit_lane := 0
 
 func start_game() -> void:
     rng.randomize()
@@ -99,11 +101,11 @@ func start_game() -> void:
     _restart()
 
 func _restart() -> void:
-    beat_interval = maxf(0.52, 1.10 - (level - 1) * 0.09)
+    beat_interval = maxf(0.60, 1.12 - (level - 1) * 0.075)
     note_total = mini(48, 10 + (level - 1) * 4)
     # Larger timing window for beginner levels; gently narrows as skill grows.
-    hit_window = maxf(0.18, 0.52 - (level - 1) * 0.065)
-    perfect_window = maxf(0.075, 0.22 - (level - 1) * 0.025)
+    hit_window = maxf(0.23, 0.52 - (level - 1) * 0.055)
+    perfect_window = maxf(0.095, 0.22 - (level - 1) * 0.020)
     active_lanes = mini(4, 2 + int((level - 1) / 2.0))
     travel_time = maxf(1.65, 2.4 - (level - 1) * 0.09)
     elapsed = 0.0
@@ -134,6 +136,7 @@ func _process(delta: float) -> void:
     if not running:
         return
     elapsed += delta
+    hit_flash = maxf(0.0, hit_flash - delta)
     for i in range(notes.size()):
         if int(notes[i]["state"]) == 0 and elapsed > float(notes[i]["time"]) + hit_window:
             notes[i]["state"] = 2
@@ -180,6 +183,8 @@ func _hit(lane: int) -> void:
         feedback.text = "WAIT FOR THE LINE"
         return
     notes[candidate]["state"] = 1
+    hit_flash = 0.30
+    hit_lane = lane
     # Each successful note plays its assigned musical pitch, forming a tune.
     var pitch: int = int(notes[candidate]["pitch"])
     if sound_enabled and pitch >= 0 and pitch < note_players.size():
@@ -207,13 +212,14 @@ class BeatBoard extends Control:
             return
         var w: float = size.x
         var h: float = size.y
-        draw_rect(Rect2(Vector2.ZERO, size), Color("#111936"))
+        draw_rect(Rect2(Vector2.ZERO, size), Color("#24134e"))
+        draw_rect(Rect2(Vector2(3, 3), size - Vector2(6, 6)), Color("#f4c96e", 0.85), false, 3.0)
         var lane_w: float = w / 4.0
         for i in range(4):
             var left: float = i * lane_w
             var color: Color = COLORS[i]
             draw_rect(Rect2(left + 2, 0, lane_w - 4, h), Color(color.r, color.g, color.b, 0.09))
-            draw_line(Vector2(left, 0), Vector2(left, h), Color("#65749e", 0.5), 2)
+            draw_line(Vector2(left, 0), Vector2(left, h), Color("#d1a5ff", 0.46), 2)
         var hit_y: float = h * 0.81
         # Draw the *actual* hittable area, derived from the same timing window
         # used by _hit() and _process(). Early levels have a larger zone.
@@ -223,7 +229,12 @@ class BeatBoard extends Control:
         draw_rect(Rect2(0, zone_top, w, zone_bottom - zone_top), Color("#b8f9ff", 0.16))
         draw_line(Vector2(0, zone_top), Vector2(w, zone_top), Color("#b8f9ff", 0.55), 2)
         draw_line(Vector2(0, zone_bottom), Vector2(w, zone_bottom), Color("#b8f9ff", 0.55), 2)
-        draw_line(Vector2(0, hit_y), Vector2(w, hit_y), Color("#b8f9ff"), 4)
+        if game.hit_flash > 0.0:
+            var flash_strength: float = game.hit_flash / 0.30
+            draw_rect(Rect2(game.hit_lane * lane_w + 4.0, zone_top, lane_w - 8.0, zone_bottom - zone_top), Color("#fff2a8", 0.30 * flash_strength))
+            draw_circle(Vector2((game.hit_lane + 0.5) * lane_w, hit_y), 33.0 * flash_strength + 10.0, Color("#ffe2a0", 0.22 * flash_strength))
+        draw_line(Vector2(0, hit_y), Vector2(w, hit_y), Color("#ffdd80"), 5)
+        draw_line(Vector2(0, hit_y - 6), Vector2(w, hit_y - 6), Color("#fff8d9", 0.45), 2)
         for note in game.notes:
             if int(note["state"]) != 0:
                 continue
@@ -234,6 +245,7 @@ class BeatBoard extends Control:
             var y: float = hit_y * (1.0 - dt / game.travel_time)
             var color: Color = COLORS[int(note["lane"])]
             draw_circle(Vector2(x, y), minf(lane_w * 0.33, 25.0), Color(color.r, color.g, color.b, 0.25))
-            draw_circle(Vector2(x, y), minf(lane_w * 0.25, 18.0), color)
+            draw_circle(Vector2(x, y), minf(lane_w * 0.29, 21.0), Color("#ffe8aa"))
+            draw_circle(Vector2(x, y), minf(lane_w * 0.23, 16.0), color)
             draw_circle(Vector2(x - 5, y - 5), 5, Color("#ffffff", 0.85))
-        draw_rect(Rect2(Vector2.ZERO, size), Color("#7ca7ed", 0.6), false, 2)
+        draw_rect(Rect2(Vector2.ZERO, size), Color("#ffdb83", 0.78), false, 3)

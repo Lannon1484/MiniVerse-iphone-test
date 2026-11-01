@@ -20,7 +20,7 @@ var rng := RandomNumberGenerator.new()
 func start_game():
     rng.randomize()
     difficulty_level = Difficulty.level("fast")
-    var round_times := [25.0, 24.0, 23.0, 22.0, 20.0]
+    var round_times := [27.0, 25.0, 24.0, 22.0, 21.0]
     time_left = round_times[mini(difficulty_level, 5) - 1] if difficulty_level <= 5 else 20.0
     var root := VBoxContainer.new()
     root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -86,7 +86,7 @@ func _spawn():
     target.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
     target.expand_icon = true
     var early_sizes := [124.0, 112.0, 101.0, 92.0, 84.0]
-    var target_size: float = early_sizes[difficulty_level - 1] if difficulty_level <= 5 else maxf(58.0, 84.0 - float(difficulty_level - 5) * 2.0)
+    var target_size: float = early_sizes[difficulty_level - 1] if difficulty_level <= 5 else maxf(68.0, 84.0 - float(difficulty_level - 5) * 1.5)
     target.custom_minimum_size = Vector2(target_size, target_size)
     target.add_theme_font_size_override("font_size",32)
     target.add_theme_color_override("font_color", Color("#17172b"))
@@ -113,6 +113,7 @@ func _hit():
     gameplay_sound.emit("collect")
     var hit_position: Vector2 = target.position + target.size * 0.5
     _floating_score(hit_position, 10 + mini(combo, 10) * 2)
+    _hit_sparkles(hit_position)
     combo += 1
     score += 10 + mini(combo-1,10)*2
     score_label.text = "SCORE %d" % score
@@ -128,6 +129,23 @@ func _hit():
     pulse.tween_property(score_label, "scale", Vector2(1.18, 1.18), 0.08)
     pulse.tween_property(score_label, "scale", Vector2.ONE, 0.14)
     _spawn()
+
+# Small, touch-transparent gold and cyan sparks at each successful tap.
+func _hit_sparkles(at: Vector2) -> void:
+    for i in range(6):
+        var spark := ColorRect.new()
+        spark.color = Color("#ffe6a2") if i % 2 == 0 else Color("#8df5ff")
+        spark.custom_minimum_size = Vector2(7, 7)
+        spark.size = Vector2(7, 7)
+        spark.position = at - Vector2(3.5, 3.5)
+        spark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        area.add_child(spark)
+        var angle: float = TAU * float(i) / 6.0
+        var destination: Vector2 = spark.position + Vector2(cos(angle), sin(angle)) * 38.0
+        var t := create_tween().set_parallel(true)
+        t.tween_property(spark, "position", destination, 0.36).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+        t.tween_property(spark, "modulate:a", 0.0, 0.36)
+        t.chain().tween_callback(spark.queue_free)
 
 func _floating_score(at: Vector2, points: int) -> void:
     var popup := Label.new()

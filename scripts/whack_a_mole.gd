@@ -10,9 +10,9 @@ var difficulty_level: int = 1
 const MOLE_IMAGE := preload("res://assets/whack/mole.png")
 const SNAKE_IMAGE := preload("res://assets/whack/snake.png")
 const HOLE_IMAGE := preload("res://assets/whack/hole.png")
-const GOOD := Color("#38d9b4")
-const BAD := Color("#fb7185")
-const BASE := Color("#27345e")
+const GOOD := Color("#7df2b3")
+const BAD := Color("#ff6aab")
+const BASE := Color("#362060")
 
 var rng := RandomNumberGenerator.new()
 var slots: Array[Button] = []
@@ -77,7 +77,7 @@ func _build() -> void:
         b.add_theme_font_size_override("font_size", 36)
         b.add_theme_stylebox_override("normal", _style(BASE))
         b.add_theme_stylebox_override("hover", _style(BASE.lightened(0.1)))
-        b.add_theme_stylebox_override("pressed", _style(Color("#4f5c96")))
+        b.add_theme_stylebox_override("pressed", _style(Color("#7c3d9d")))
         b.pressed.connect(_tap.bind(i))
         grid.add_child(b)
         slots.append(b)
@@ -103,8 +103,11 @@ func _style(color: Color) -> StyleBoxFlat:
     var s := StyleBoxFlat.new()
     s.bg_color = color
     s.set_corner_radius_all(19)
-    s.set_border_width_all(3)
-    s.border_color = Color("#7684c4")
+    s.set_border_width_all(5)
+    s.border_color = Color("#ffdc85")
+    s.shadow_color = Color("#291051", 0.75)
+    s.shadow_size = 8
+    s.shadow_offset = Vector2(0, 4)
     return s
 
 func _restart() -> void:
@@ -173,6 +176,7 @@ func _tap(index: int) -> void:
             combo = 0
             score = maxi(0, score - 25)
             message_label.text = "Oops! You hit a snake: -25"
+            message_label.add_theme_color_override("font_color", Color("#ff8eb8"))
         else:
             gameplay_sound.emit("collect")
             hits += 1
@@ -182,8 +186,17 @@ func _tap(index: int) -> void:
             message_label.text = "COMBO x%d! +%d" % [combo, points] if combo >= 3 else "+%d points!" % points
             message_label.add_theme_color_override("font_color", Color("#fef08a") if combo >= 3 else Color("#a5f3fc"))
             var hit_pulse := create_tween()
-            hit_pulse.tween_property(score_label, "scale", Vector2(1.13, 1.13), 0.09)
-            hit_pulse.tween_property(score_label, "scale", Vector2.ONE, 0.14)
+            hit_pulse.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+            hit_pulse.tween_property(score_label, "scale", Vector2(1.22, 1.22), 0.10)
+            hit_pulse.tween_property(score_label, "scale", Vector2.ONE, 0.20)
+            # A quick golden pulse makes successful hits feel magical.
+            var hit_button: Button = slots[index]
+            hit_button.pivot_offset = hit_button.size * 0.5
+            hit_button.scale = Vector2.ONE
+            var slot_tween := create_tween()
+            slot_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+            slot_tween.tween_property(hit_button, "scale", Vector2(1.10, 1.10), 0.09)
+            slot_tween.tween_property(hit_button, "scale", Vector2.ONE, 0.17)
         _clear_target()
         next_spawn = 0.15
     else:

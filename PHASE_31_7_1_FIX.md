@@ -1,0 +1,1 @@
+Fix: Removed accidental indentation before the top-level rng variable in scripts/rhythm_rush.gd. This invalid GDScript syntax prevented main.gd from preloading the Rhythm Rush script. No gameplay changes.

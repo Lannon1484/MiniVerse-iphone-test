@@ -2,8 +2,9 @@ extends Control
 
 signal finished(game_id: String, score: int, extra: Dictionary)
 
+const Difficulty = preload("res://scripts/difficulty.gd")
 const SIZE := 3
-const TILE_COLORS := [Color("#6e85ed"), Color("#7c6dea"), Color("#4d9bd4"), Color("#5a77c9")]
+const TILE_COLORS := [Color("#a46cf4"), Color("#52c9e7"), Color("#e877c8"), Color("#65d7a3")]
 var board: Array[int] = []
 var cells: Array[Button] = []
 var status: Label
@@ -21,7 +22,7 @@ func start_game() -> void:
     title.text = "TILE SLIDE"
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     title.add_theme_font_size_override("font_size", 29)
-    title.add_theme_color_override("font_color", Color("#b6c6ff"))
+    title.add_theme_color_override("font_color", Color("#ffe1a0"))
     root.add_child(title)
     status = Label.new()
     status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -59,7 +60,10 @@ func _new_puzzle() -> void:
         board.append(value)
     board.append(0)
     var previous_empty: int = -1
-    for turn in range(32):
+    # Difficulty grows gradually while every puzzle remains solvable:
+    # shuffle by legal moves starting from the solved configuration.
+    var shuffle_moves: int = 20 + mini(24, maxi(0, Difficulty.level("slide") - 1) * 3)
+    for turn in range(shuffle_moves):
         var empty: int = board.find(0)
         var choices: Array[int] = _neighbors(empty)
         if choices.size() > 1:
@@ -68,6 +72,12 @@ func _new_puzzle() -> void:
         board[empty] = board[selected]
         board[selected] = 0
         previous_empty = empty
+    # Avoid handing out a solved board after a random walk.
+    if _solved():
+        var empty: int = board.find(0)
+        var neighbor: int = _neighbors(empty)[0]
+        board[empty] = board[neighbor]
+        board[neighbor] = 0
     moves = 0
     running = true
     _refresh()
@@ -91,6 +101,12 @@ func _tap(index: int) -> void:
     board[empty] = board[index]
     board[index] = 0
     moves += 1
+    # Quick jewel-tile pulse on each valid slide, without delaying input.
+    var moved_cell: Button = cells[empty]
+    moved_cell.pivot_offset = moved_cell.size * 0.5
+    var slide_tween := create_tween()
+    slide_tween.tween_property(moved_cell, "scale", Vector2(1.06, 1.06), 0.10)
+    slide_tween.tween_property(moved_cell, "scale", Vector2.ONE, 0.13)
     if _solved():
         running = false
         _refresh()
@@ -115,11 +131,19 @@ func _refresh() -> void:
         var bg: Color = Color("#253052") if value == 0 else TILE_COLORS[(value - 1) % TILE_COLORS.size()]
         var style := StyleBoxFlat.new()
         style.bg_color = bg
-        style.set_corner_radius_all(12)
+        style.set_corner_radius_all(16)
+        style.border_width_left = 4
+        style.border_width_right = 4
+        style.border_width_top = 4
+        style.border_width_bottom = 4
+        style.border_color = Color("#ffdc88") if value != 0 else Color("#6e4c9a")
+        style.shadow_color = Color("#4b1d85", 0.72)
+        style.shadow_size = 7
+        style.shadow_offset = Vector2(0, 3)
         style.set_content_margin_all(10)
         cell.add_theme_stylebox_override("normal", style)
         cell.add_theme_stylebox_override("hover", style)
         cell.add_theme_stylebox_override("pressed", style)
         cell.add_theme_stylebox_override("disabled", style)
-        cell.add_theme_color_override("font_color", Color.WHITE)
+        cell.add_theme_color_override("font_color", Color("#fff7dc"))
         cell.add_theme_color_override("font_disabled_color", Color.WHITE)

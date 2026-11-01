@@ -103,6 +103,8 @@ func _new_round() -> void:
         var symbol: String = SYMBOLS[i]
         cards.append(symbol); cards.append(symbol)
     grid.columns = 4 if pair_count >= 5 else 3
+    # Four columns are kept for larger decks, while smaller early
+    # decks have wider cards and remain comfortable to tap on phones.
     cards.shuffle()
     # First rounds show cards briefly to teach the symbols.
     for child in grid.get_children(): child.queue_free()
@@ -133,7 +135,7 @@ func _new_round() -> void:
         status_label.text = "Memorize the pictures!"
         for i in range(buttons.size()):
             buttons[i].icon = PICTURES[cards[i]]
-        await get_tree().create_timer(4.5 if difficulty_level == 1 else (3.5 if difficulty_level == 2 else 2.0)).timeout
+        await get_tree().create_timer(5.0 if difficulty_level == 1 else (4.0 if difficulty_level == 2 else 2.75)).timeout
         if not is_inside_tree() or this_round != round_serial:
             return
         for i in range(buttons.size()):
@@ -160,6 +162,11 @@ func _pick(index: int) -> void:
     buttons[index].icon = PICTURES[cards[index]]
     var face_color: Color = FACE_COLORS[SYMBOLS.find(cards[index])]
     buttons[index].add_theme_stylebox_override("normal", _card_style(face_color))
+    # Gentle card-reveal pop that does not delay the next touch.
+    buttons[index].pivot_offset = buttons[index].size * 0.5
+    buttons[index].scale = Vector2(0.92, 0.92)
+    var reveal := create_tween()
+    reveal.tween_property(buttons[index], "scale", Vector2.ONE, 0.16).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
     if first_pick == -1:
         first_pick = index
         return
@@ -169,6 +176,12 @@ func _pick(index: int) -> void:
         buttons[first_pick].add_theme_stylebox_override("disabled", _card_style(Color("#167c64")))
         buttons[index].add_theme_stylebox_override("disabled", _card_style(Color("#167c64")))
         buttons[first_pick].disabled = true; buttons[index].disabled = true
+        for card_index in [first_pick, index]:
+            var card: Button = buttons[card_index]
+            card.pivot_offset = card.size * 0.5
+            var glow := create_tween()
+            glow.tween_property(card, "scale", Vector2(1.08, 1.08), 0.11)
+            glow.tween_property(card, "scale", Vector2.ONE, 0.17).set_trans(Tween.TRANS_BACK)
         pairs_found += 1
         score += maxi(20, 100 - moves * 2)
         first_pick = -1

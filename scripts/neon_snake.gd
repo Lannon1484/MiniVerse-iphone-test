@@ -6,10 +6,10 @@ signal finished(game_id: String, score: int, extra: Dictionary)
 const GRID_SIZE := 15
 const Difficulty = preload("res://scripts/difficulty.gd")
 var difficulty_level: int = 1
-const SKY := Color("#10183c")
-const AQUA := Color("#58edc4")
-const GOLD := Color("#ffcc67")
-const PINK := Color("#ff8ccf")
+const SKY := Color("#1b1045")
+const AQUA := Color("#7af7d3")
+const GOLD := Color("#ffe28c")
+const PINK := Color("#ff88d6")
 
 var snake: Array[Vector2i] = []
 var direction: Vector2i = Vector2i.RIGHT
@@ -156,6 +156,8 @@ func _process(delta: float) -> void:
     if not playing:
         return
     accumulator += minf(delta, 0.1)
+    if board != null:
+        board.queue_redraw()
     # Beginner levels leave more time to plan each turn. Speed grows
     # gradually with collected stars and the unlocked level.
     var starting_step: float = maxf(0.155, 0.30 - float(difficulty_level - 1) * 0.016)
@@ -275,8 +277,8 @@ class SnakeBoard extends Control:
             return
         var cell: float = side / 15.0
         var origin: Vector2 = (size - Vector2(side, side)) * 0.5
-        draw_rect(Rect2(origin, Vector2(side, side)), Color("#17234f"), true)
-        draw_rect(Rect2(origin, Vector2(side, side)), Color("#a9c5ff"), false, 3.0)
+        draw_rect(Rect2(origin, Vector2(side, side)), Color("#251451"), true)
+        draw_rect(Rect2(origin, Vector2(side, side)), Color("#ffe19b"), false, 4.0)
         for i in range(1, 15):
             var offset: float = float(i) * cell
             draw_line(origin + Vector2(offset, 0), origin + Vector2(offset, side), Color("#536a9a", 0.24), 1.0)
@@ -287,14 +289,15 @@ class SnakeBoard extends Control:
             var angle: float = -PI / 2.0 + float(i) * PI / 5.0
             var radius: float = cell * (0.48 if i % 2 == 0 else 0.22)
             star_points.append(center + Vector2(cos(angle), sin(angle)) * radius)
-        draw_circle(center, cell * 0.49, Color("#ffd369", 0.24))
+        var pulse: float = 0.5 + 0.5 * sin(float(Time.get_ticks_msec()) * 0.007)
+        draw_circle(center, cell * (0.45 + 0.14 * pulse), Color("#ffd369", 0.15 + 0.18 * pulse))
         draw_colored_polygon(star_points, Color("#ffda68"))
         for i in range(snake.size() - 1, -1, -1):
             var pos: Vector2 = origin + Vector2(snake[i]) * cell + Vector2.ONE * cell * 0.5
             var radius: float = cell * (0.45 if i == 0 else 0.39)
             draw_circle(pos + Vector2(0, cell * 0.07), radius, Color("#08152e", 0.7))
-            draw_circle(pos, radius, Color("#59eec1") if i == 0 else Color("#35c8df"))
-            draw_arc(pos, radius, 0.0, TAU, 24, Color("#c8fff4", 0.85), 2.0)
+            draw_circle(pos, radius, Color("#9affcb") if i == 0 else Color("#52e5c7"))
+            draw_arc(pos, radius, 0.0, TAU, 24, Color("#fff1a8", 0.9), 2.5)
             if i == 0:
                 draw_circle(pos + Vector2(-cell * 0.14, -cell * 0.10), cell * 0.075, Color("#122c4e"))
                 draw_circle(pos + Vector2(cell * 0.14, -cell * 0.10), cell * 0.075, Color("#122c4e"))

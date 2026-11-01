@@ -2,7 +2,7 @@ extends Control
 
 signal finished(game_id: String, score: int, extra: Dictionary)
 
-const ARENA := Color("#111a3d")
+const ARENA := Color("#26134f")
 const CYAN := Color("#55f0ed")
 const PINK := Color("#ff668f")
 const GOLD := Color("#ffdf8b")
@@ -18,6 +18,7 @@ var spawn_clock: float = 0.0
 var running: bool = false
 var touch_down: bool = false
 var score: int = 0
+var dodge_glow: float = 0.0
 
 func start_game() -> void:
     rng.randomize()
@@ -102,7 +103,7 @@ func _process(delta: float) -> void:
     spawn_clock -= delta
     if spawn_clock <= 0.0:
         _spawn_hazard()
-        spawn_clock = maxf(0.31, 0.83 - elapsed * 0.011)
+        spawn_clock = maxf(0.38, 0.91 - elapsed * 0.010)
     var arena_height: float = maxf(arena.size.y, 1.0)
     var speed: float = 175.0 + elapsed * 4.3
     for index in range(hazards.size() - 1, -1, -1):
@@ -138,19 +139,25 @@ func _draw_arena() -> void:
     var w: float = arena.size.x
     var h: float = arena.size.y
     arena.draw_rect(Rect2(Vector2.ZERO, Vector2(w,h)), ARENA, true)
+    arena.draw_rect(Rect2(Vector2(3,3), Vector2(w-6,h-6)), Color("#ffd77e",0.86), false, 3.0)
     for i in range(1, 6):
         var gx: float = w * float(i) / 6.0
-        arena.draw_line(Vector2(gx, 0), Vector2(gx,h), Color(0.3,0.8,0.95,0.13), 1.0)
+        arena.draw_line(Vector2(gx, 0), Vector2(gx,h), Color("#c18cff",0.19), 1.0)
     for i in range(1, 10):
         var gy: float = h * float(i) / 10.0
-        arena.draw_line(Vector2(0,gy), Vector2(w,gy), Color(0.3,0.8,0.95,0.11), 1.0)
+        arena.draw_line(Vector2(0,gy), Vector2(w,gy), Color("#c18cff",0.14), 1.0)
     for hazard in hazards:
         var center := Vector2(float(hazard["x"]) * w, float(hazard["y"]) * h)
         var radius: float = minf(w * 0.045, 18.0)
-        arena.draw_rect(Rect2(center - Vector2(radius,radius), Vector2(radius * 2.0,radius * 2.0)), PINK, true)
+        arena.draw_rect(Rect2(center - Vector2(radius-3.0,radius-3.0), Vector2(radius * 2.0-6.0,radius * 2.0-6.0)), PINK, true)
+        arena.draw_rect(Rect2(center - Vector2(radius,radius), Vector2(radius * 2.0,radius * 2.0)), Color("#ffe2a0"), false, 3.0)
         arena.draw_rect(Rect2(center - Vector2(radius * 0.58,radius * 0.58), Vector2(radius * 1.16,radius * 1.16)), Color("#ffb1c5"), false, 2.0)
     var player_pos := Vector2(player_x * w, h * 0.86)
+    var pulse: float = 0.5 + 0.5 * sin(elapsed * 8.0)
+    arena.draw_circle(player_pos, 27.0 + pulse * 5.0, Color("#6bf6ff", 0.10 + 0.12 * pulse))
+    arena.draw_arc(player_pos, 24.0 + pulse * 3.0, 0.0, TAU, 36, Color("#ffde86", 0.40 + 0.32 * pulse), 2.0)
     arena.draw_circle(player_pos, 21.0, Color(0.25,0.95,0.9,0.17))
-    arena.draw_circle(player_pos, 13.0, CYAN)
+    arena.draw_circle(player_pos, 16.0, Color("#ffe49b"))
+    arena.draw_circle(player_pos, 12.0, CYAN)
     arena.draw_circle(player_pos + Vector2(-3.0,-3.0), 5.0, Color.WHITE)
     arena.draw_arc(player_pos, 19.0, 0.0, TAU, 28, CYAN, 2.0)

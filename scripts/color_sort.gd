@@ -8,7 +8,7 @@ signal gameplay_sound(kind: String)
 const CAPACITY := 4
 const Difficulty = preload("res://scripts/difficulty.gd")
 var difficulty_level: int = 1
-const PALETTE := [Color("#ff739f"), Color("#55d9ff"), Color("#ffd15b"), Color("#83e69b")]
+const PALETTE := [Color("#ff65bc"), Color("#5be9ff"), Color("#ffe17b"), Color("#87f3ae")]
 const LABELS := ["PINK", "BLUE", "GOLD", "GREEN"]
 
 var tubes: Array = []
@@ -94,9 +94,11 @@ func _build_ui() -> void:
 
 func _tube_style(highlight: bool) -> StyleBoxFlat:
     var style := StyleBoxFlat.new()
-    style.bg_color = Color("#304a87") if highlight else Color("#172d60")
-    style.border_color = Color("#ffe08a") if highlight else Color("#76dfff")
-    style.set_border_width_all(3)
+    style.bg_color = Color("#69309c") if highlight else Color("#281650")
+    style.border_color = Color("#fff1a8") if highlight else Color("#dfb5ff")
+    style.set_border_width_all(4)
+    style.shadow_color = Color("#14072f", 0.7)
+    style.shadow_size = 6
     style.set_corner_radius_all(18)
     style.content_margin_left = 3
     style.content_margin_right = 3
@@ -151,6 +153,13 @@ func _pick(index: int) -> void:
         selected = index
         status.text = "Now tap the tube you want to pour into."
         _refresh()
+        # Brief lift on selection; controls stay fully interactive.
+        var selected_button: Button = buttons[index]
+        selected_button.pivot_offset = selected_button.size * 0.5
+        var lift := create_tween()
+        lift.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+        lift.tween_property(selected_button, "scale", Vector2(1.06, 1.06), 0.12)
+        lift.tween_property(selected_button, "scale", Vector2.ONE, 0.18)
         return
     if index == selected:
         selected = -1
@@ -183,7 +192,13 @@ func _pick(index: int) -> void:
     if is_instance_valid(pour_effect):
         pour_effect.queue_free()
         pour_effect = null
-    GameplayPop.celebrate(status, "NICE POUR!  %d MOVES" % moves, Color("#67e8f9"))
+    GameplayPop.celebrate(status, "NICE POUR!  %d MOVES" % moves, Color("#ffe09a"))
+    var pour_button: Button = buttons[index]
+    pour_button.pivot_offset = pour_button.size * 0.5
+    var pour_tween := create_tween()
+    pour_tween.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+    pour_tween.tween_property(pour_button, "scale", Vector2(1.08, 1.08), 0.10)
+    pour_tween.tween_property(pour_button, "scale", Vector2.ONE, 0.20)
     _refresh()
     if _solved():
         completed = true
@@ -262,7 +277,7 @@ class TubeArt extends Control:
         var top: float = 16.0
         var bottom: float = h - 15.0
         var inner := Rect2(x + 5, top + 8, tube_w - 10, bottom - top - 17)
-        draw_rect(inner, Color("#071738", 0.85), true)
+        draw_rect(inner, Color("#1a0d41", 0.85), true)
         var slot_h: float = inner.size.y / 4.0
         for i in range(contents.size()):
             var color_id: int = int(contents[i])

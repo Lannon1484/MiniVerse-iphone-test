@@ -3,8 +3,8 @@ extends Control
 signal finished(game_id: String, score: int, extra: Dictionary)
 
 const ROUND_SECONDS := 40.0
-const BG := Color("#111b3c")
-const FRUIT_COLORS := [Color("#ff696e"), Color("#ffd15b"), Color("#80e39c"), Color("#ffab70")]
+const BG := Color("#27164f")
+const FRUIT_COLORS := [Color("#ff638e"), Color("#ffd45f"), Color("#76e6aa"), Color("#ffac68")]
 const BOMB_COLOR := Color("#35324c")
 
 var arena: Control
@@ -19,6 +19,8 @@ var fruit_caught: int = 0
 var bombs_hit: int = 0
 var running: bool = false
 var pointer_down: bool = false
+var catch_flash: float = 0.0
+var catch_x: float = 0.5
 
 func start_game() -> void:
     rng.randomize()
@@ -68,6 +70,7 @@ func _restart() -> void:
     bombs_hit = 0
     running = true
     pointer_down = false
+    catch_flash = 0.0
     _update_hud()
     if is_instance_valid(arena):
         arena.queue_redraw()
@@ -100,10 +103,11 @@ func _process(delta: float) -> void:
     if not running or not is_instance_valid(arena):
         return
     elapsed += delta
+    catch_flash = maxf(0.0, catch_flash - delta)
     spawn_timer -= delta
     if spawn_timer <= 0.0:
         _spawn_object()
-        spawn_timer = maxf(0.27, 0.78 - elapsed * 0.009)
+        spawn_timer = maxf(0.32, 0.82 - elapsed * 0.008)
     var speed: float = 160.0 + elapsed * 4.0
     var arena_height: float = maxf(arena.size.y, 1.0)
     for i in range(objects.size() - 1, -1, -1):
@@ -118,6 +122,8 @@ func _process(delta: float) -> void:
                 return
             score += 10
             fruit_caught += 1
+            catch_flash = 0.36
+            catch_x = float(item["x"])
             objects.remove_at(i)
         elif float(item["y"]) > 1.08:
             objects.remove_at(i)
@@ -127,7 +133,7 @@ func _process(delta: float) -> void:
         _finish()
 
 func _spawn_object() -> void:
-    var bomb_chance: float = minf(0.28, 0.14 + elapsed * 0.003)
+    var bomb_chance: float = minf(0.24, 0.10 + elapsed * 0.003)
     objects.append({
         "x": rng.randf_range(0.10, 0.90),
         "y": -0.05,
@@ -143,21 +149,31 @@ func _draw_arena() -> void:
     var w: float = arena.size.x
     var h: float = arena.size.y
     arena.draw_rect(Rect2(Vector2.ZERO, Vector2(w, h)), BG)
+    arena.draw_rect(Rect2(Vector2(3,3), Vector2(w-6,h-6)), Color("#ffdc87",0.84), false, 3.0)
     for i in range(1, 6):
         var gx: float = w * float(i) / 6.0
-        arena.draw_line(Vector2(gx, 0), Vector2(gx, h), Color("#26345b"), 1.0)
+        arena.draw_line(Vector2(gx, 0), Vector2(gx, h), Color("#ab7fd2",0.20), 1.0)
     for item in objects:
         var pos := Vector2(float(item["x"]) * w, float(item["y"]) * h)
         if bool(item["bomb"]):
+            arena.draw_circle(pos, 22.0, Color("#ffb3d7",0.30))
             arena.draw_circle(pos, 19.0, BOMB_COLOR)
+            arena.draw_arc(pos, 19.0, 0.0, TAU, 28, Color("#ffdc87"), 2.5)
             arena.draw_circle(pos + Vector2(-6, -5), 4.0, Color("#aaa8c4"))
             arena.draw_line(pos + Vector2(4, -16), pos + Vector2(11, -27), Color("#ffcd79"), 3.0)
         else:
-            arena.draw_circle(pos, 19.0, FRUIT_COLORS[int(item["color"])])
+            arena.draw_circle(pos, 21.0, Color("#ffe6a8"))
+            arena.draw_circle(pos, 18.0, FRUIT_COLORS[int(item["color"])])
             arena.draw_circle(pos + Vector2(-5, -6), 5.0, Color(1, 1, 1, 0.28))
             arena.draw_line(pos + Vector2(1, -18), pos + Vector2(5, -26), Color("#8ce9a0"), 4.0)
+    if catch_flash > 0.0:
+        var flash: float = catch_flash / 0.36
+        var sparkle_center := Vector2(catch_x * w, h * 0.88)
+        arena.draw_circle(sparkle_center, 32.0 * (1.0 - flash) + 9.0, Color("#ffe28c", 0.32 * flash))
+        arena.draw_arc(sparkle_center, 30.0 * (1.0 - flash) + 12.0, 0.0, TAU, 32, Color("#fff4b9", flash), 3.0)
     var center := Vector2(player_x * w, h * 0.9)
-    arena.draw_rect(Rect2(center + Vector2(-39, -7), Vector2(78, 28)), Color("#d58c5a"))
+    arena.draw_rect(Rect2(center + Vector2(-39, -7), Vector2(78, 28)), Color("#9651ae"))
+    arena.draw_line(center + Vector2(-36, 14), center + Vector2(36, 14), Color("#ffe6aa"), 3.0)
     arena.draw_rect(Rect2(center + Vector2(-43, -11), Vector2(86, 10)), Color("#ffcd79"))
     arena.draw_arc(center + Vector2(0, -9), 38.0, PI, TAU, 24, Color("#ffe1a0"), 3.0)
 

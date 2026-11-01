@@ -53,7 +53,7 @@ func _restart():
     block_x = centered_x
     direction = 1.0
     difficulty_level = Difficulty.level("stack")
-    speed = minf(235.0, 115.0 + float(difficulty_level - 1) * 7.0)
+    speed = minf(225.0, 110.0 + float(difficulty_level - 1) * 6.5)
     tower.clear()
     tower.append(Rect2(centered_x, 0.0, block_width, block_height))
     score_label.text = "HEIGHT 0"

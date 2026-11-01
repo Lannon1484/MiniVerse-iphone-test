@@ -4234,7 +4234,9 @@ func _level_goal(id: String, played_level: int) -> int:
     }
     if first_five.has(id) and played_level <= 5:
         return int(first_five[id][played_level - 1])
-    var base_goals := {"fast": 135, "merge": 24, "stack": 6, "whack": 105, "snake": 3, "hopper": 3, "rhythm": 1650, "dodge": 30}
+    # Level 6 must continue from level 5, not reset to a smaller goal.
+    # Every game with an introductory goal table needs a matching base.
+    var base_goals := {"fast": 135, "merge": 96, "stack": 6, "whack": 105, "snake": 3, "hopper": 3, "rhythm": 1650, "dodge": 30, "fruit": 170}
     var base: int = int(base_goals.get(id, 1))
     var step: int = maxi(0, played_level - (5 if first_five.has(id) else 1))
     return maxi(1, int(round(float(base) * (1.0 + 0.10 * float(step)))))
@@ -4244,10 +4246,16 @@ func _finished(id: String, score: int, extra: Dictionary = {}):
     var played_level: int = Difficulty.level(id)
     var goal: int = _level_goal(id, played_level)
     var puzzle_completion: bool = id in ["memory", "sort", "dots", "slide"]
-    var passed: bool = puzzle_completion or score >= goal
+    # Puzzle games signal completion directly. Respect an explicit result
+    # flag if one is supplied instead of treating every callback as a win.
+    var puzzle_passed: bool = bool(extra.get("completed", extra.get("won", true)))
+    var passed: bool = (puzzle_completion and puzzle_passed) or (not puzzle_completion and score >= goal)
     var stars_earned: int = 1
     if passed:
-        stars_earned = 3 if puzzle_completion or score >= int(ceil(float(goal) * 1.6)) else 2
+        # Number Merge finishes as soon as its own score target is reached.
+        # Requiring 160% of the target made three stars unattainable.
+        # Treat clearing its score target as a three-star completion.
+        stars_earned = 3 if puzzle_completion or id == "merge" or score >= int(ceil(float(goal) * 1.6)) else 2
         Difficulty.complete(id)
     var record: bool = score > previous_best
     best_stars[id] = maxi(int(best_stars.get(id, 0)), stars_earned)

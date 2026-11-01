@@ -36,8 +36,12 @@ func _new_board():
                 value = 8
             row.append(value)
         board.append(row)
-    board[0][0] = 2
-    board[0][1] = 2
+    # Always start with a valid merge, but vary its position so boards
+    # do not feel identical across repeated plays.
+    var first_x: int = rng.randi_range(0, N - 2)
+    var first_y: int = rng.randi_range(0, N - 1)
+    board[first_y][first_x] = 2
+    board[first_y][first_x + 1] = 2
     for c in get_children(): c.queue_free()
     custom_minimum_size = Vector2(0, 820)
     var root := VBoxContainer.new()
@@ -78,6 +82,20 @@ func _add_tile():
     if spots.is_empty(): return
     var p=spots[rng.randi_range(0,spots.size()-1)]
     board[p.y][p.x]=2 if rng.randf()<0.9 else 4
+    # Prevent an unwinnable board with empty cells but no matching
+    # neighbors: guarantee a legal next merge without giving free points.
+    if not _has_merge():
+        for y in range(N):
+            for x in range(N):
+                if board[y][x] == 0:
+                    if x > 0 and board[y][x - 1] > 0:
+                        board[y][x] = board[y][x - 1]
+                        return
+                    if y > 0 and board[y - 1][x] > 0:
+                        board[y][x] = board[y - 1][x]
+                        return
+        # If the newly spawned tile was the last space and no match
+        # exists, the normal full-board loss check still applies.
 
 func _refresh():
     if not is_instance_valid(grid): return
@@ -139,6 +157,7 @@ func _press(x: int,y: int):
         var value: int=board[y][x]*2
         board[y][x]=value; board[selected.y][selected.x]=0; score+=value; moves+=1; selected=Vector2i(-1,-1); _add_tile()
         status.text = "SUPER MERGE! +%d" % value if value >= 16 else "NICE MERGE! +%d" % value
+        _merge_sparkles()
         status.add_theme_color_override("font_color", Color("#fef08a"))
         status.scale = Vector2(0.9, 0.9)
         var merge_tween := create_tween()
@@ -162,6 +181,26 @@ func _press(x: int,y: int):
     if _full() and not _has_merge():
         running=false; status.text="Board full! Final score: %d"%score
         finished.emit("merge",score,{"moves":moves})
+
+# A brief gold-and-aqua burst around the score when tiles combine.
+func _merge_sparkles() -> void:
+    if not is_instance_valid(score_label): return
+    var parent: Control = score_label.get_parent() as Control
+    if parent == null: return
+    var center: Vector2 = score_label.position + score_label.size * 0.5
+    for i in range(5):
+        var sparkle := ColorRect.new()
+        sparkle.color = Color("#ffe09a") if i % 2 == 0 else Color("#86f5e7")
+        sparkle.size = Vector2(6, 6)
+        sparkle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+        sparkle.position = center
+        parent.add_child(sparkle)
+        var a: float = TAU * float(i) / 5.0
+        var end: Vector2 = center + Vector2(cos(a), sin(a)) * 28.0
+        var tw := create_tween().set_parallel(true)
+        tw.tween_property(sparkle, "position", end, 0.32)
+        tw.tween_property(sparkle, "modulate:a", 0.0, 0.32)
+        tw.chain().tween_callback(sparkle.queue_free)
 
 func _full() -> bool:
     for row in board:
