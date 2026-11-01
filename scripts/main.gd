@@ -19,6 +19,8 @@ const NeonDodge = preload("res://scripts/neon_dodge.gd")
 const TileSlide = preload("res://scripts/tile_slide.gd")
 const FruitCatch = preload("res://scripts/fruit_catch.gd")
 const BubbleBurst = preload("res://scripts/bubble_burst.gd")
+const RuneRunner = preload("res://scripts/rune_runner.gd")
+const GemBlocks = preload("res://scripts/gem_blocks.gd")
 const ConnectDots = preload("res://scripts/connect_dots.gd")
 const Difficulty = preload("res://scripts/difficulty.gd")
 const SkyHopper = preload("res://scripts/sky_hopper.gd")
@@ -46,7 +48,9 @@ const GAMES := [
     {"id":"dodge","title":"Neon Dodge","genre":"REFLEX SURVIVAL","desc":"Drag your glowing orb to dodge falling hazards.","color":Color("#55f0ed")},
     {"id":"slide","title":"Tile Slide","genre":"PUZZLE","desc":"Slide numbered tiles into order using the empty space.","color":Color("#a9b6ff")},
     {"id":"fruit","title":"Fruit Catch","genre":"ARCADE","desc":"Catch falling fruit and dodge dangerous bombs.","color":Color("#ffb55f")},
-    {"id":"bubble","title":"Bubble Burst","genre":"PUZZLE ARCADE","desc":"Launch magical bubbles and match three or more.","color":Color("#e58dff")}
+    {"id":"bubble","title":"Bubble Burst","genre":"PUZZLE ARCADE","desc":"Launch magical bubbles and match three or more.","color":Color("#e58dff")},
+    {"id":"runner","title":"Rune Runner","genre":"REFLEX ARCADE","desc":"Switch lanes, dodge hazards, and collect glowing runes.","color":Color("#78e7e9")},
+    {"id":"gems","title":"Gem Blocks","genre":"PUZZLE STRATEGY","desc":"Place gem shapes and clear rows or columns.","color":Color("#d5a2ff")}
 ]
 
 var current_tab := "home"
@@ -278,7 +282,7 @@ var challenge_streak := 0
 var challenge_streak_last_day := ""
 var challenge_streak_notice := ""
 
-const MISSION_GAMES := ["fast", "merge", "stack", "memory", "whack", "sort", "snake", "dots", "hopper", "rhythm", "dodge", "slide", "fruit"]
+const MISSION_GAMES := ["fast", "merge", "stack", "memory", "whack", "sort", "snake", "dots", "hopper", "rhythm", "dodge", "slide", "fruit", "bubble", "runner"]
 
 # Login rewards are claimable once per local calendar day. A missed day
 # resets the consecutive streak; claiming again on the same day does not.
@@ -316,7 +320,9 @@ const TUTORIALS := {
     "dodge": ["Drag your glowing orb left and right to avoid falling neon hazards.", "Survive for 35 seconds. Earn one point each second, and clear the level by reaching its goal."],
     "slide": ["Tap a numbered tile next to the empty space to slide it.", "Put all numbers in order, with the empty space at the end. Fewer moves earn a higher score."],
     "fruit": ["Drag your basket left and right to catch falling fruit.", "Avoid bombs! Collect fruit for points and survive the 40-second round."],
-    "bubble": ["Tap a column to launch the glowing bubble shown below the board.", "Match three or more touching bubbles of the same color. Clear bubbles before they reach the bottom!"]
+    "bubble": ["Tap a column to launch the glowing bubble shown below the board.", "Match three or more touching bubbles of the same color. Clear bubbles before they reach the bottom!"],
+    "runner": ["Swipe left or right, or tap the large arrow buttons to switch between three lanes.", "Collect glowing pink runes for points. Avoid cyan crystal obstacles and survive the 40-second run!"],
+    "gems": ["Select one of the three gem shapes, then tap a square to place its top-left corner.", "Fill an entire row or column to clear it for bonus points. Use all three shapes to draw a fresh set."]
 }
 
 func _ready():
@@ -2536,6 +2542,66 @@ func _favorite_game_count() -> int:
     return count
 
 
+# Compact fantasy cards make browsing practical on narrow phone screens.
+# The full-width illustrated banner remains the visual focus.
+func _compact_game_card(g: Dictionary) -> PanelContainer:
+    var game_id: String = str(g.id)
+    var card := PanelContainer.new()
+    card.add_theme_stylebox_override("panel", _lobby_card_style(g.color))
+    var body := VBoxContainer.new()
+    body.add_theme_constant_override("separation", 5)
+    card.add_child(body)
+
+    var art := TextureRect.new()
+    art.texture = load("res://assets/lobby/wide_card_%s.png" % game_id)
+    art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+    art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+    art.custom_minimum_size = Vector2(0, 88)
+    art.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    body.add_child(art)
+
+    var info := HBoxContainer.new()
+    info.add_theme_constant_override("separation", 8)
+    body.add_child(info)
+    var text_col := VBoxContainer.new()
+    text_col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    text_col.add_theme_constant_override("separation", 3)
+    info.add_child(text_col)
+    var title_label := Label.new()
+    title_label.text = str(g.title)
+    title_label.add_theme_font_size_override("font_size", 21)
+    title_label.add_theme_color_override("font_color", TEXT)
+    text_col.add_child(title_label)
+    var sub := Label.new()
+    sub.text = "%s  •  LEVEL %d  •  BEST %d" % [str(g.genre), Difficulty.level(game_id), int(best_scores.get(game_id, 0))]
+    sub.add_theme_font_size_override("font_size", 14)
+    sub.add_theme_color_override("font_color", Color("#ffe29e"))
+    sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    text_col.add_child(sub)
+    var star_label := Label.new()
+    var earned: int = clampi(int(best_stars.get(game_id, 0)), 0, 3)
+    star_label.text = "★".repeat(earned) + "☆".repeat(3 - earned)
+    star_label.add_theme_font_size_override("font_size", 21)
+    star_label.add_theme_color_override("font_color", Color("#ffd66f"))
+    info.add_child(star_label)
+
+    var actions := HBoxContainer.new()
+    actions.add_theme_constant_override("separation", 8)
+    body.add_child(actions)
+    var favorite_on: bool = bool(favorite_games.get(game_id, false))
+    var favorite_button := _button("♥ SAVED" if favorite_on else "♡ FAVORITE",
+        func(): _toggle_game_favorite(game_id), Color("#344a76"), 46)
+    favorite_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    favorite_button.add_theme_font_size_override("font_size", 15)
+    actions.add_child(favorite_button)
+    var play_button := _button("▶ PLAY", func(): launch(game_id), Color("#fa7098"), 48)
+    play_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    play_button.add_theme_font_size_override("font_size", 18)
+    actions.add_child(play_button)
+    return card
+
+
 func _game_card(g: Dictionary) -> PanelContainer:
     var card := PanelContainer.new()
     card.add_theme_stylebox_override("panel", _lobby_card_style(g.color))
@@ -2644,10 +2710,13 @@ const GAME_CATEGORIES := {
     "dodge": "REFLEX",
     "slide": "PUZZLE",
     "fruit": "ARCADE",
-    "bubble": "PUZZLE"
+    "bubble": "PUZZLE",
+    "runner": "REFLEX",
+    "gems": "STRATEGY"
 }
 
 const CATEGORY_DESCRIPTIONS := {
+    "NEW": "Explore the latest MiniVerse releases.",
     "ALL": "Browse the complete MiniVerse collection.",
     "FAVORITES": "The games you've saved for quick access.",
     "ARCADE": "Action, movement, and classic arcade fun.",
@@ -2668,6 +2737,8 @@ func _category_game_count(category: String) -> int:
 func _matches_filter(g: Dictionary, category: String) -> bool:
     if category == "ALL":
         return true
+    if category == "NEW":
+        return str(g.id) in ["bubble", "runner", "gems"]
     if category == "FAVORITES":
         return bool(favorite_games.get(str(g.id), false))
     return str(GAME_CATEGORIES.get(str(g.id), "")) == category
@@ -2985,45 +3056,43 @@ func game_collection_page() -> void:
 func library(restore_scroll: int = -1):
     current_tab = "games"
     _shell()
-    _heading("Game Library", "%d mini-games. Choose a category and jump into a game." % GAMES.size())
-    _fantasy_section_art()
-
-    # Collection rewards now live on their own page, rather than pushing the
-    # game cards far below the fold.
-    var discovered: int = _discovered_game_count()
-    content.add_child(_button("COLLECTION & REWARDS  (%d/%d DISCOVERED)" % [discovered, GAMES.size()], game_collection_page, _theme_color(), 58))
-    content.add_child(_button("MY FAVORITE GAMES", favorite_games_page, Color("#344a76"), 52))
-    content.add_child(_button("GAME MASTERY  (%d REWARDS READY)" % _mastery_claimable_count(), game_mastery_page, Color("#344a76"), 52))
-    content.add_child(_button("GAME ACHIEVEMENTS  (%d READY)" % _game_achievements_ready(), game_achievements_page, Color("#344a76"), 52))
-
+    _heading("Game Library", "%d fantasy mini-games  •  Choose your next adventure" % GAMES.size())
+    # Put playable games first, not collection menus or a tall hero image.
+    # New additions remain visible immediately without scrolling past 13 cards.
     var filters := HFlowContainer.new()
-    filters.add_theme_constant_override("h_separation", 8)
-    filters.add_theme_constant_override("v_separation", 9)
+    filters.add_theme_constant_override("h_separation", 6)
+    filters.add_theme_constant_override("v_separation", 6)
     content.add_child(filters)
-    for category in ["ALL", "FAVORITES", "ARCADE", "PUZZLE", "REFLEX", "STRATEGY"]:
+    for category in ["NEW", "ALL", "FAVORITES", "ARCADE", "PUZZLE", "REFLEX", "STRATEGY"]:
         var selected_category: String = category
         var amount: int = _category_game_count(selected_category)
-        var chip_label: String = "%s (%d)" % [selected_category, amount]
-        var chip := _button(chip_label, func():
+        var chip := _button("%s (%d)" % [selected_category, amount], func():
             library_filter = selected_category
             library()
-        , _theme_color() if library_filter == selected_category else Color("#344a76"), 48)
+        , _theme_color() if library_filter == selected_category else Color("#344a76"), 42)
         chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-        chip.add_theme_font_size_override("font_size", 18)
+        chip.add_theme_font_size_override("font_size", 15)
         filters.add_child(chip)
 
     var count: int = _category_game_count(library_filter)
-    _heading("%s  (%d)" % [library_filter, count], str(CATEGORY_DESCRIPTIONS.get(library_filter, "Browse the collection.")))
+    var heading_label: String = "NEW ADVENTURES" if library_filter == "NEW" else "%s GAMES" % library_filter
+    _heading("%s  (%d)" % [heading_label, count], "Fresh releases first • Tap PLAY to jump straight in.")
     if count == 0:
-        if library_filter == "FAVORITES":
-            _card("NO FAVORITES YET", "Tap ADD TO FAVORITES on any game card to save it here.")
-        else:
-            _card("NO GAMES IN THIS CATEGORY", "Try another category to find a game.")
+        _card("NO MATCHES", "Choose another category or save a favorite game.")
     else:
-        for game in GAMES:
+        # Newest releases first, including in ALL and genre filters.
+        for index in range(GAMES.size() - 1, -1, -1):
+            var game: Dictionary = GAMES[index]
             if _matches_filter(game, library_filter):
-                content.add_child(_game_card(game))
+                content.add_child(_compact_game_card(game))
 
+    # Collection features are still available, but no longer block game discovery.
+    _heading("YOUR COLLECTION", "Rewards, mastery and achievements")
+    var discovered: int = _discovered_game_count()
+    content.add_child(_button("COLLECTION & REWARDS  (%d/%d)" % [discovered, GAMES.size()], game_collection_page, _theme_color(), 48))
+    content.add_child(_button("MY FAVORITE GAMES", favorite_games_page, Color("#344a76"), 46))
+    content.add_child(_button("GAME MASTERY  (%d READY)" % _mastery_claimable_count(), game_mastery_page, Color("#344a76"), 46))
+    content.add_child(_button("GAME ACHIEVEMENTS  (%d READY)" % _game_achievements_ready(), game_achievements_page, Color("#344a76"), 46))
     if restore_scroll >= 0 and is_instance_valid(lobby_scroll):
         lobby_scroll.set_deferred("scroll_vertical", restore_scroll)
 
@@ -3313,6 +3382,8 @@ func launch(id: String):
         "slide": _play_slide()
         "fruit": _play_fruit()
         "bubble": _play_bubble()
+        "runner": _play_runner()
+        "gems": _play_gems()
     if not bool(seen_tutorials.get(id, false)):
         _show_tutorial(id)
 
@@ -3776,6 +3847,18 @@ func _play_hopper():
     _mount_game(g)
     g.start_game()
 
+func _play_gems():
+    var g := GemBlocks.new()
+    g.finished.connect(_finished)
+    _mount_game(g)
+    g.start_game()
+
+func _play_runner():
+    var g := RuneRunner.new()
+    g.finished.connect(_finished)
+    _mount_game(g)
+    g.start_game()
+
 func _play_bubble():
     var g := BubbleBurst.new()
     g.finished.connect(_finished)
@@ -4223,7 +4306,9 @@ func _level_goal(id: String, played_level: int) -> int:
         "rhythm": [350, 650, 950, 1300, 1650],
         "dodge": [12, 16, 20, 25, 30],
         "fruit": [50, 80, 110, 140, 170],
-        "bubble": [90, 120, 150, 180, 210]
+        "bubble": [90, 120, 150, 180, 210],
+        "runner": [60, 75, 90, 105, 120],
+        "gems": [100, 150, 200, 250, 300]
     }
     if first_five.has(id) and played_level <= 5:
         return int(first_five[id][played_level - 1])
@@ -4240,7 +4325,7 @@ func _level_goal(id: String, played_level: int) -> int:
         return mini(30, int(round(6.0 * (1.0 + 0.10 * float(maxi(0, played_level - 5))))))
     # Level 6 must continue from level 5, not reset to a smaller goal.
     # Every game with an introductory goal table needs a matching base.
-    var base_goals := {"fast": 135, "merge": 96, "stack": 6, "whack": 105, "snake": 3, "hopper": 3, "rhythm": 1650, "dodge": 30, "fruit": 170, "bubble": 210}
+    var base_goals := {"fast": 135, "merge": 96, "stack": 6, "whack": 105, "snake": 3, "hopper": 3, "rhythm": 1650, "dodge": 30, "fruit": 170, "bubble": 210, "runner": 120, "gems": 300}
     var base: int = int(base_goals.get(id, 1))
     var step: int = maxi(0, played_level - (5 if first_five.has(id) else 1))
     return maxi(1, int(round(float(base) * (1.0 + 0.10 * float(step)))))
@@ -4258,7 +4343,7 @@ func _finished(id: String, score: int, extra: Dictionary = {}):
     if passed:
         # Clear-to-complete puzzles and target-triggered games end as soon
         # as their goal is reached. A 160% requirement is unfair for them.
-        if puzzle_completion or id in ["merge", "bubble"]:
+        if puzzle_completion or id in ["merge", "bubble", "gems"]:
             stars_earned = 3
         # Neon Dodge has a fixed 35-second round. Surviving the full round
         # earns three stars; reaching the level target earns two.

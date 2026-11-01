@@ -33,7 +33,7 @@ func start_game() -> void:
         for col in range(COLS):
             line.append(rng.randi_range(0, mini(PALETTE.size() - 1, 2 + level / 3)) if row < 3 else -1)
         board.append(line)
-    next_color = rng.randi_range(0, mini(PALETTE.size() - 1, 2 + level / 3))
+    next_color = _choose_useful_color(level)
     _build_ui()
     _refresh()
 
@@ -136,8 +136,12 @@ func _refresh() -> void:
     cells.set("board_data", board)
     cells.queue_redraw()
     next_preview.modulate = PALETTE[next_color]
-    for button in column_buttons.get_children():
-        button.disabled = not running
+    for col in range(COLS):
+        var button: Button = column_buttons.get_child(col)
+        # Keep blocked lanes visible but unavailable, so every arrow
+        # clearly corresponds to a legal bubble-launch column.
+        button.disabled = not running or int(board[ROWS - 1][col]) >= 0
+        button.tooltip_text = "Lane full" if int(board[ROWS - 1][col]) >= 0 else "Launch in lane %d" % (col + 1)
 
 func _shoot(col: int) -> void:
     if not running:
@@ -150,7 +154,11 @@ func _shoot(col: int) -> void:
     if landing == -1:
         landing = 0
     if landing >= ROWS:
-        _end_round()
+        # A blocked lane is not a misfire or an automatic loss.
+        # Let the player pick another lane; the normal loss condition
+        # still applies when the bottom row fills after a valid shot.
+        status.text = "LANE FULL — CHOOSE ANOTHER ARROW"
+        gameplay_sound.emit("error")
         return
     board[landing][col] = next_color
     shots_left -= 1
@@ -164,11 +172,24 @@ func _shoot(col: int) -> void:
     else:
         gameplay_sound.emit("pour")
     var level: int = Difficulty.level("bubble")
-    next_color = rng.randi_range(0, mini(PALETTE.size() - 1, 2 + level / 3))
+    next_color = _choose_useful_color(level)
     if score >= goal or shots_left <= 0 or _bottom_occupied():
         _end_round()
     else:
         _refresh()
+
+# Favor colors already on the board so shots can create real matches.
+# A fully empty board still uses the level's unlocked palette.
+func _choose_useful_color(level: int) -> int:
+    var available: Array[int] = []
+    for row in board:
+        for value in row:
+            var color_id: int = int(value)
+            if color_id >= 0 and not available.has(color_id):
+                available.append(color_id)
+    if available.is_empty():
+        return rng.randi_range(0, mini(PALETTE.size() - 1, 2 + level / 3))
+    return available[rng.randi_range(0, available.size() - 1)]
 
 func _connected(start_row: int, start_col: int, kind: int) -> Array[Vector2i]:
     var found: Array[Vector2i] = []
