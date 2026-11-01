@@ -1,0 +1,1 @@
+Bubble Burst layout fix: replaces fixed-size tile grid with responsive, full-width circular glossy bubbles, larger full-width lane buttons, and an actual next-bubble image. Keeps scoring and match logic unchanged. Please verify on Godot 4.7.2 and iPhone Safari; Godot runtime validation was not available.

@@ -18,6 +18,7 @@ const NeonSnake = preload("res://scripts/neon_snake.gd")
 const NeonDodge = preload("res://scripts/neon_dodge.gd")
 const TileSlide = preload("res://scripts/tile_slide.gd")
 const FruitCatch = preload("res://scripts/fruit_catch.gd")
+const BubbleBurst = preload("res://scripts/bubble_burst.gd")
 const ConnectDots = preload("res://scripts/connect_dots.gd")
 const Difficulty = preload("res://scripts/difficulty.gd")
 const SkyHopper = preload("res://scripts/sky_hopper.gd")
@@ -44,7 +45,8 @@ const GAMES := [
     {"id":"rhythm","title":"Rhythm Rush","genre":"TIMING ARCADE","desc":"Tap glowing notes on the beat line.","color":Color("#fb86d5")},
     {"id":"dodge","title":"Neon Dodge","genre":"REFLEX SURVIVAL","desc":"Drag your glowing orb to dodge falling hazards.","color":Color("#55f0ed")},
     {"id":"slide","title":"Tile Slide","genre":"PUZZLE","desc":"Slide numbered tiles into order using the empty space.","color":Color("#a9b6ff")},
-    {"id":"fruit","title":"Fruit Catch","genre":"ARCADE","desc":"Catch falling fruit and dodge dangerous bombs.","color":Color("#ffb55f")}
+    {"id":"fruit","title":"Fruit Catch","genre":"ARCADE","desc":"Catch falling fruit and dodge dangerous bombs.","color":Color("#ffb55f")},
+    {"id":"bubble","title":"Bubble Burst","genre":"PUZZLE ARCADE","desc":"Launch magical bubbles and match three or more.","color":Color("#e58dff")}
 ]
 
 var current_tab := "home"
@@ -313,7 +315,8 @@ const TUTORIALS := {
     "rhythm": ["Tap the lane when a note enters the glowing catch zone.", "Each successful hit plays part of the melody. Keep the rhythm to finish the song!"],
     "dodge": ["Drag your glowing orb left and right to avoid falling neon hazards.", "Survive for 35 seconds. Earn one point each second, and clear the level by reaching its goal."],
     "slide": ["Tap a numbered tile next to the empty space to slide it.", "Put all numbers in order, with the empty space at the end. Fewer moves earn a higher score."],
-    "fruit": ["Drag your basket left and right to catch falling fruit.", "Avoid bombs! Collect fruit for points and survive the 40-second round."]
+    "fruit": ["Drag your basket left and right to catch falling fruit.", "Avoid bombs! Collect fruit for points and survive the 40-second round."],
+    "bubble": ["Tap a column to launch the glowing bubble shown below the board.", "Match three or more touching bubbles of the same color. Clear bubbles before they reach the bottom!"]
 }
 
 func _ready():
@@ -2640,7 +2643,8 @@ const GAME_CATEGORIES := {
     "rhythm": "REFLEX",
     "dodge": "REFLEX",
     "slide": "PUZZLE",
-    "fruit": "ARCADE"
+    "fruit": "ARCADE",
+    "bubble": "PUZZLE"
 }
 
 const CATEGORY_DESCRIPTIONS := {
@@ -3308,6 +3312,7 @@ func launch(id: String):
         "dodge": _play_dodge()
         "slide": _play_slide()
         "fruit": _play_fruit()
+        "bubble": _play_bubble()
     if not bool(seen_tutorials.get(id, false)):
         _show_tutorial(id)
 
@@ -3385,27 +3390,8 @@ func _show_tutorial(id: String) -> void:
         label.add_theme_font_size_override("font_size", 17)
         label.add_theme_color_override("font_color", TEXT)
         body.add_child(label)
-    # First interactive lessons: players practice the core action before
-    # starting Fast Fingers and Memory Match. Other games retain their
-    # illustrated instructions while their practice interactions are built.
-    if id == "fast":
-        _tutorial_fast_practice(body, id)
-    elif id == "memory":
-        _tutorial_memory_practice(body, id)
-    elif id == "merge" or id == "snake":
-        _tutorial_swipe_practice(body, id)
-    elif id == "stack" or id == "rhythm":
-        _tutorial_timing_practice(body, id)
-    elif id == "whack":
-        _tutorial_whack_practice(body, id)
-    elif id == "sort":
-        _tutorial_sort_practice(body, id)
-    elif id == "dots":
-        _tutorial_dots_practice(body, id)
-    elif id == "hopper":
-        _tutorial_hopper_practice(body, id)
-    else:
-        body.add_child(_button("LET'S PLAY!", func(): _dismiss_tutorial(id), ACCENT, 60))
+    # Tutorials are informational only. Never require practice actions to start.
+    body.add_child(_button("LET'S PLAY!", func(): _dismiss_tutorial(id), ACCENT, 60))
 
 func _tutorial_fast_practice(body: VBoxContainer, id: String) -> void:
     var prompt := Label.new()
@@ -3786,6 +3772,12 @@ func _play_dots():
 
 func _play_hopper():
     var g := SkyHopper.new()
+    g.finished.connect(_finished)
+    _mount_game(g)
+    g.start_game()
+
+func _play_bubble():
+    var g := BubbleBurst.new()
     g.finished.connect(_finished)
     _mount_game(g)
     g.start_game()
@@ -4230,13 +4222,25 @@ func _level_goal(id: String, played_level: int) -> int:
         "merge": [16, 32, 48, 72, 96],
         "rhythm": [350, 650, 950, 1300, 1650],
         "dodge": [12, 16, 20, 25, 30],
-        "fruit": [50, 80, 110, 140, 170]
+        "fruit": [50, 80, 110, 140, 170],
+        "bubble": [90, 120, 150, 180, 210]
     }
     if first_five.has(id) and played_level <= 5:
         return int(first_five[id][played_level - 1])
+    # Number Merge's own board ends the round at 96 + 24 per level after 5.
+    # The shared win condition must use that same number, not a 10% curve.
+    if id == "merge":
+        return 96 + maxi(0, played_level - 5) * 24
+    # Neon Dodge lasts at most 35 seconds, so a goal above 30 seconds
+    # would eventually make levels unwinnable.
+    if id == "dodge":
+        return mini(30, int(round(30.0 * (1.0 + 0.10 * float(maxi(0, played_level - 5))))))
+    # Perfect Stack ends after 30 successful placements.
+    if id == "stack":
+        return mini(30, int(round(6.0 * (1.0 + 0.10 * float(maxi(0, played_level - 5))))))
     # Level 6 must continue from level 5, not reset to a smaller goal.
     # Every game with an introductory goal table needs a matching base.
-    var base_goals := {"fast": 135, "merge": 96, "stack": 6, "whack": 105, "snake": 3, "hopper": 3, "rhythm": 1650, "dodge": 30, "fruit": 170}
+    var base_goals := {"fast": 135, "merge": 96, "stack": 6, "whack": 105, "snake": 3, "hopper": 3, "rhythm": 1650, "dodge": 30, "fruit": 170, "bubble": 210}
     var base: int = int(base_goals.get(id, 1))
     var step: int = maxi(0, played_level - (5 if first_five.has(id) else 1))
     return maxi(1, int(round(float(base) * (1.0 + 0.10 * float(step)))))
@@ -4252,10 +4256,20 @@ func _finished(id: String, score: int, extra: Dictionary = {}):
     var passed: bool = (puzzle_completion and puzzle_passed) or (not puzzle_completion and score >= goal)
     var stars_earned: int = 1
     if passed:
-        # Number Merge finishes as soon as its own score target is reached.
-        # Requiring 160% of the target made three stars unattainable.
-        # Treat clearing its score target as a three-star completion.
-        stars_earned = 3 if puzzle_completion or id == "merge" or score >= int(ceil(float(goal) * 1.6)) else 2
+        # Clear-to-complete puzzles and target-triggered games end as soon
+        # as their goal is reached. A 160% requirement is unfair for them.
+        if puzzle_completion or id in ["merge", "bubble"]:
+            stars_earned = 3
+        # Neon Dodge has a fixed 35-second round. Surviving the full round
+        # earns three stars; reaching the level target earns two.
+        elif id == "dodge":
+            stars_earned = 3 if score >= 35 else 2
+        # Perfect Stack has a maximum height of 30. Completing the full
+        # tower earns three stars even on later levels.
+        elif id == "stack":
+            stars_earned = 3 if score >= 30 or score >= int(ceil(float(goal) * 1.6)) else 2
+        else:
+            stars_earned = 3 if score >= int(ceil(float(goal) * 1.6)) else 2
         Difficulty.complete(id)
     var record: bool = score > previous_best
     best_stars[id] = maxi(int(best_stars.get(id, 0)), stars_earned)
@@ -4492,7 +4506,8 @@ func _result_tip(id: String, passed: bool, stars_earned: int) -> String:
         "snake": "Tip: Plan your turns before you reach the wall.",
         "hopper": "Tip: Aim for the center of each platform.",
         "rhythm": "Tip: Tap when notes enter the glowing catch zone.",
-        "dodge": "Tip: Keep moving to avoid falling hazards."
+        "dodge": "Tip: Keep moving to avoid falling hazards.",
+        "bubble": "Tip: Match three touching bubbles of one color; plan each shot."
     }
     return str(hints.get(id, "Try again — every attempt helps you improve."))
 
