@@ -48,6 +48,8 @@ const GAMES := [
 ]
 
 var current_tab := "home"
+var rewards_snapshot_expanded := false
+
 var shop_category := "home"
 var profile_section := "overview"
 var showcased_badge := "none"
@@ -101,7 +103,11 @@ const BANNER_DECORATIONS = [
     {"id":"crown","name":"Royal Crown","symbol":"♛","description":"A regal banner accent","price":180},
     {"id":"diamonds","name":"Diamonds","symbol":"◆","description":"Sharp crystal decorations","price":240},
     {"id":"stars","name":"Champion Stars","symbol":"★","description":"Earned at player level 5","level_required":5},
-    {"id":"laurel","name":"Victory Laurel","symbol":"❖","description":"Earned at player level 10","level_required":10}
+    {"id":"laurel","name":"Victory Laurel","symbol":"❖","description":"Earned at player level 10","level_required":10},
+    {"id":"master_flame","name":"Master Flame","symbol":"✹","description":"Earn 40 total wins across MiniVerse","mastery_wins_required":40},
+    {"id":"master_gem","name":"Master Gem","symbol":"✧","description":"Earn 150 total wins across MiniVerse","mastery_wins_required":150},
+    {"id":"achievement_star","name":"Achievement Star","symbol":"✪","description":"Claim 20 game achievements","achievement_claims_required":20},
+    {"id":"achievement_crown","name":"Achievement Crown","symbol":"♕","description":"Claim all 52 game achievements","achievement_claims_required":52}
 ]
 
 var owned_backgrounds: Dictionary = {}
@@ -127,7 +133,11 @@ const PROFILE_BANNERS = [
     {"id":"prism","name":"Prism","color":"#5c448f","description":"Unlock with 120 coins","price":120},
     {"id":"champion","name":"Champion","color":"#8d6333","description":"Unlock with 220 coins","price":220},
     {"id":"explorer","name":"Explorer","color":"#29745c","description":"Earn at player level 5","level_required":5},
-    {"id":"legend","name":"Legend","color":"#873d73","description":"Earn at player level 10","level_required":10}
+    {"id":"legend","name":"Legend","color":"#873d73","description":"Earn at player level 10","level_required":10},
+    {"id":"bronze_master","name":"Bronze Master","color":"#77503d","description":"Earn 15 total wins across MiniVerse","mastery_wins_required":15},
+    {"id":"diamond_master","name":"Diamond Master","color":"#236e91","description":"Earn 80 total wins across MiniVerse","mastery_wins_required":80},
+    {"id":"achievement_hunter","name":"Achievement Hunter","color":"#5b3581","description":"Claim 10 game achievements","achievement_claims_required":10},
+    {"id":"achievement_legend","name":"Achievement Legend","color":"#805329","description":"Claim 35 game achievements","achievement_claims_required":35}
 ]
 
 var sound_player: AudioStreamPlayer
@@ -150,6 +160,28 @@ var total_games_played := 0
 var total_wins := 0
 var game_play_counts: Dictionary = {}
 var game_win_counts: Dictionary = {}
+var mastery_rewards_claimed: Dictionary = {}
+var game_achievement_claimed: Dictionary = {}
+var game_achievement_notice := ""
+var achievement_selected_game := ""
+var achievement_status_filter := "ALL"
+const GAME_ACHIEVEMENT_TIERS = [
+    {"id":"first_steps","name":"First Steps","type":"plays","target":1,"coins":20,"desc":"Play this game once"},
+    {"id":"regular","name":"Regular","type":"plays","target":10,"coins":60,"desc":"Play this game 10 times"},
+    {"id":"first_win","name":"First Victory","type":"wins","target":1,"coins":35,"desc":"Win a round in this game"},
+    {"id":"dedicated","name":"Dedicated","type":"wins","target":15,"coins":110,"desc":"Win 15 rounds in this game"}
+]
+
+var mastery_selected_game := ""
+var mastery_rank_filter := "ALL"
+var mastery_notice := ""
+const MASTERY_TIERS = [
+    {"wins":3,"name":"Bronze","coins":40},
+    {"wins":10,"name":"Silver","coins":90},
+    {"wins":25,"name":"Gold","coins":175},
+    {"wins":50,"name":"Diamond","coins":300}
+]
+
 var achievement_new: Array[String] = []
 # Cosmetic purchases are local, permanent and do not change game difficulty.
 var owned_themes: Dictionary = {"classic": true}
@@ -227,6 +259,10 @@ var mission_day := ""
 var mission_progress: Dictionary = {}
 var mission_claimed: Dictionary = {}
 var mission_notice := ""
+var challenge_ready_notice: String = ""
+var daily_bonus_progress := 0
+var daily_bonus_claimed := false
+var daily_bonus_notice := ""
 # Weekly objectives reset every Monday (device local time). Their progress is
 # stored independently of the daily missions and existing player statistics.
 var weekly_key := ""
@@ -307,6 +343,9 @@ func _daily_rewards_ready() -> int:
             ready += 1
     if _login_can_claim():
         ready += 1
+    var bonus: Dictionary = _daily_bonus_definition()
+    if not daily_bonus_claimed and daily_bonus_progress >= int(bonus["target"]):
+        ready += 1
     return ready
 
 
@@ -324,44 +363,184 @@ func _rewards_ready_count() -> int:
     return _daily_rewards_ready() + _weekly_rewards_ready()
 
 
+func _challenge_summary_line(title: String, progress: int, target: int, claimed: bool) -> String:
+    var status: String = "CLAIMED" if claimed else ("READY" if progress >= target else "%d/%d" % [mini(progress, target), target])
+    return "%s  •  %s" % [title, status]
+
+
+func _challenge_highlights() -> void:
+    # Read-only visual feedback: use the existing progress and claim state.
+    var ready_names: Array[String] = []
+    var completed_today: int = 0
+    var completed_week: int = 0
+    for mission in _mission_definitions():
+        var key: String = str(mission["id"])
+        if mission_claimed.has(key):
+            completed_today += 1
+        elif int(mission_progress.get(key, 0)) >= int(mission["target"]):
+            ready_names.append(str(mission["title"]))
+    var bonus: Dictionary = _daily_bonus_definition()
+    if daily_bonus_claimed:
+        completed_today += 1
+    elif daily_bonus_progress >= int(bonus["target"]):
+        ready_names.append(str(bonus["title"]))
+    for challenge in _weekly_definitions():
+        var key: String = str(challenge["id"])
+        if weekly_claimed.has(key):
+            completed_week += 1
+        elif int(weekly_progress.get(key, 0)) >= int(challenge["target"]):
+            ready_names.append(str(challenge["title"]))
+    if ready_names.size() > 0:
+        _card("★ CHALLENGES COMPLETE!", "%d reward%s ready to claim!\n%s" % [ready_names.size(), "" if ready_names.size() == 1 else "s", "  •  ".join(ready_names)])
+    elif completed_today == 4 and completed_week == 4:
+        _card("★ ALL CHALLENGES CLAIMED!", "You've collected every daily and weekly challenge reward. Great work!")
+    elif completed_today > 0 or completed_week > 0:
+        _card("★ CHALLENGE MOMENTUM", "Daily rewards claimed: %d / 4  •  Weekly rewards claimed: %d / 4" % [completed_today, completed_week])
+    var daily_progress_label := Label.new()
+    daily_progress_label.text = "Daily claimed: %d / 4" % completed_today
+    daily_progress_label.add_theme_font_size_override("font_size", 17)
+    content.add_child(daily_progress_label)
+    var daily_bar := ProgressBar.new()
+    daily_bar.custom_minimum_size.y = 14
+    daily_bar.max_value = 4
+    daily_bar.value = completed_today
+    daily_bar.show_percentage = false
+    content.add_child(daily_bar)
+    var weekly_progress_label := Label.new()
+    weekly_progress_label.text = "Weekly claimed: %d / 4" % completed_week
+    weekly_progress_label.add_theme_font_size_override("font_size", 17)
+    content.add_child(weekly_progress_label)
+    var weekly_bar := ProgressBar.new()
+    weekly_bar.custom_minimum_size.y = 14
+    weekly_bar.max_value = 4
+    weekly_bar.value = completed_week
+    weekly_bar.show_percentage = false
+    content.add_child(weekly_bar)
+
+
+func _toggle_rewards_snapshot() -> void:
+    rewards_snapshot_expanded = not rewards_snapshot_expanded
+    _rewards_hub()
+
+
+func _rewards_section_label(title_text: String, hint_text: String) -> void:
+    var row := HBoxContainer.new()
+    row.add_theme_constant_override("separation", 8)
+    content.add_child(row)
+    var heading := Label.new()
+    heading.text = title_text
+    heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    heading.add_theme_font_size_override("font_size", 21)
+    heading.add_theme_color_override("font_color", _menu_accent_text(_theme_color()))
+    row.add_child(heading)
+    var hint := Label.new()
+    hint.text = hint_text
+    hint.add_theme_font_size_override("font_size", 15)
+    hint.add_theme_color_override("font_color", MUTED)
+    row.add_child(hint)
+
+
+func _challenge_overview() -> void:
+    # Keep the two destinations visible even when the full list is collapsed.
+    var daily_ready: int = maxi(0, _daily_rewards_ready() - (1 if _login_can_claim() else 0))
+    var weekly_ready: int = _weekly_rewards_ready()
+    _rewards_section_label("Today", "%d ready" % daily_ready)
+    if rewards_snapshot_expanded:
+        var daily_lines: Array[String] = []
+        for mission in _mission_definitions():
+            var key: String = str(mission["id"])
+            daily_lines.append(_challenge_summary_line(str(mission["title"]), int(mission_progress.get(key, 0)), int(mission["target"]), mission_claimed.has(key)))
+        var daily_bonus: Dictionary = _daily_bonus_definition()
+        daily_lines.append(_challenge_summary_line(str(daily_bonus["title"]), daily_bonus_progress, int(daily_bonus["target"]), daily_bonus_claimed))
+        _card("TODAY'S OBJECTIVES", "\n".join(daily_lines))
+    content.add_child(_menu_button("OPEN DAILY MISSIONS", daily_missions, Color("#fbbf24"), "missions", 50))
+    _rewards_section_label("This Week", "%d ready" % weekly_ready)
+    if rewards_snapshot_expanded:
+        var weekly_lines: Array[String] = []
+        for challenge in _weekly_definitions():
+            var key: String = str(challenge["id"])
+            weekly_lines.append(_challenge_summary_line(str(challenge["title"]), int(weekly_progress.get(key, 0)), int(challenge["target"]), weekly_claimed.has(key)))
+        _card("THIS WEEK'S OBJECTIVES", "\n".join(weekly_lines))
+    content.add_child(_menu_button("OPEN WEEKLY CHALLENGES", weekly_challenges, Color("#34d399"), "missions", 50))
+    content.add_child(_button("HIDE OBJECTIVE DETAILS" if rewards_snapshot_expanded else "SHOW ALL 8 OBJECTIVES", _toggle_rewards_snapshot, PANEL2, 48))
+
+
+func _claim_all_challenge_rewards() -> void:
+    # The daily login reward is intentionally excluded: it uses a separate
+    # calendar claim flow. The three core daily missions still trigger the
+    # normal streak calculation exactly once after they are all claimed.
+    _mission_reset_if_needed()
+    _weekly_reset_if_needed()
+    var daily_count: int = 0
+    var weekly_count: int = 0
+    var coins_earned: int = 0
+    var xp_earned: int = 0
+    for mission in _mission_definitions():
+        var key: String = str(mission["id"])
+        if not mission_claimed.has(key) and int(mission_progress.get(key, 0)) >= int(mission["target"]):
+            mission_claimed[key] = true
+            daily_count += 1
+            coins_earned += int(mission["coins"])
+            xp_earned += int(mission["xp"])
+    var bonus: Dictionary = _daily_bonus_definition()
+    if not daily_bonus_claimed and daily_bonus_progress >= int(bonus["target"]):
+        daily_bonus_claimed = true
+        daily_count += 1
+        coins_earned += int(bonus["coins"])
+        xp_earned += int(bonus["xp"])
+    for challenge in _weekly_definitions():
+        var key: String = str(challenge["id"])
+        if not weekly_claimed.has(key) and int(weekly_progress.get(key, 0)) >= int(challenge["target"]):
+            weekly_claimed[key] = true
+            weekly_count += 1
+            coins_earned += int(challenge["coins"])
+            xp_earned += int(challenge["xp"])
+    if daily_count + weekly_count == 0:
+        _rewards_hub()
+        return
+    coins += coins_earned
+    xp += xp_earned
+    level = _level_from_xp(xp)
+    # Preserve the established 3-mission streak rules and reward.
+    _challenge_streak_reward()
+    mission_notice = "Claimed %d daily and %d weekly rewards: +%d coins, +%d XP!" % [daily_count, weekly_count, coins_earned, xp_earned]
+    weekly_notice = mission_notice
+    daily_bonus_notice = mission_notice
+    _play_sound(SFX_COLLECT)
+    _save()
+    _rewards_hub()
+
+
 func _rewards_hub() -> void:
     current_tab = "rewards"
     _mission_reset_if_needed()
     _weekly_reset_if_needed()
     _shell()
-    _heading("Rewards Hub", "Everything you can earn, in one easy place.")
+    _heading("Rewards Hub", "Your challenges, rewards, and daily login in one place.")
     if level_up_notice != "":
         _card("LEVEL-UP REWARD!", level_up_notice)
         level_up_notice = ""
-    var daily_ready: int = _daily_rewards_ready()
+    var daily_ready: int = maxi(0, _daily_rewards_ready() - (1 if _login_can_claim() else 0))
     var weekly_ready: int = _weekly_rewards_ready()
-    var total_ready: int = daily_ready + weekly_ready
-    if total_ready > 0:
-        _card("READY TO COLLECT", "%d reward%s available across daily and weekly challenges." % [total_ready, "" if total_ready == 1 else "s"])
-    else:
-        _card("ALL CAUGHT UP", "Play games to make progress toward your next rewards.")
-
-    # Four destinations; the detailed missions and login calendar live on
-    # their own screens instead of filling this dashboard.
-    _heading("Daily", "Quick rewards that reset with the calendar.")
-    var login_label: String = "DAILY LOGIN REWARD"
-    if _login_can_claim():
-        login_label += "  • READY"
-    content.add_child(_menu_button(login_label, _login_rewards_page, Color("#fbbf24"), "missions"))
-    var daily_label: String = "TODAY'S MISSIONS"
-    if daily_ready > (1 if _login_can_claim() else 0):
-        daily_label += "  • REWARDS READY"
-    content.add_child(_menu_button(daily_label, daily_missions, Color("#fbbf24"), "missions"))
+    var challenge_ready: int = daily_ready + weekly_ready
+    if challenge_ready > 0:
+        _card("REWARDS READY", "%d completed challenge%s waiting to be claimed." % [challenge_ready, "" if challenge_ready == 1 else "s"])
+        content.add_child(_button("CLAIM ALL CHALLENGE REWARDS (%d)" % challenge_ready, _claim_all_challenge_rewards, Color("#34d399"), 56))
+    _rewards_section_label("Challenge Progress", "Daily + Weekly")
+    _challenge_highlights()
+    _challenge_overview()
+    _rewards_section_label("Daily Login", "Once per day")
+    var login_label: String = "CLAIM DAILY LOGIN" if _login_can_claim() else "VIEW DAILY LOGIN CALENDAR"
+    content.add_child(_menu_button(login_label, _login_rewards_page, Color("#fbbf24"), "missions", 50))
     if challenge_streak > 0:
-        _card("MISSION STREAK", "%d consecutive completed day(s). Claim all three missions each day to continue your streak." % challenge_streak)
-
-    _heading("More Ways to Earn", "Weekly goals, achievements and events.")
-    var weekly_label: String = "WEEKLY CHALLENGES"
-    if weekly_ready > 0:
-        weekly_label += "  • %d READY" % weekly_ready
-    content.add_child(_menu_button(weekly_label, weekly_challenges, Color("#34d399"), "missions"))
-    content.add_child(_menu_button("ACHIEVEMENTS", achievements, Color("#344a9b"), "achievements"))
-    content.add_child(_menu_button("CHALLENGES & EVENTS", events, Color("#344a9b"), "events"))
+        var streak_label := Label.new()
+        streak_label.text = "Mission streak: %d day%s" % [challenge_streak, "" if challenge_streak == 1 else "s"]
+        streak_label.add_theme_font_size_override("font_size", 16)
+        streak_label.add_theme_color_override("font_color", MUTED)
+        content.add_child(streak_label)
+    _rewards_section_label("More to Earn", "Explore")
+    content.add_child(_menu_button("ACHIEVEMENTS", achievements, Color("#344a9b"), "achievements", 50))
+    content.add_child(_menu_button("CHALLENGES & EVENTS", events, Color("#344a9b"), "events", 50))
 
 
 func _login_rewards_page() -> void:
@@ -768,10 +947,47 @@ func _decorated_banner_title() -> String:
     return symbol + "  " + _banner_name().to_upper() + "  " + symbol if symbol != "" else _banner_name().to_upper()
 
 
+func _total_mastery_wins() -> int:
+    var total: int = 0
+    for game in GAMES:
+        total += int(game_win_counts.get(str(game["id"]), 0))
+    return total
+
+
+func _cosmetic_unlock_status(item: Dictionary) -> String:
+    if int(item.get("achievement_claims_required", 0)) > 0:
+        return _achievement_cosmetic_progress(item)
+    if int(item.get("mastery_wins_required", 0)) > 0:
+        return _mastery_cosmetic_progress(item)
+    if int(item.get("level_required", 0)) > 0:
+        return "LEVEL %d" % int(item["level_required"])
+    return "%d COINS" % int(item.get("price", 0))
+
+
+func _achievement_cosmetic_progress(item: Dictionary) -> String:
+    var goal: int = int(item.get("achievement_claims_required", 0))
+    if goal <= 0:
+        return ""
+    return "%d / %d ACHIEVEMENTS CLAIMED" % [min(game_achievement_claimed.size(), goal), goal]
+
+
+func _mastery_cosmetic_progress(item: Dictionary) -> String:
+    var goal: int = int(item.get("mastery_wins_required", 0))
+    if goal <= 0:
+        return ""
+    return "%d / %d TOTAL WINS" % [min(_total_mastery_wins(), goal), goal]
+
+
 func _banner_decoration_owned(item: Dictionary) -> bool:
     var decoration_id: String = str(item["id"])
     var required_level: int = int(item.get("level_required", 0))
     var price: int = int(item.get("price", 0))
+    var mastery_goal: int = int(item.get("mastery_wins_required", 0))
+    var achievement_goal: int = int(item.get("achievement_claims_required", 0))
+    if achievement_goal > 0:
+        return game_achievement_claimed.size() >= achievement_goal
+    if mastery_goal > 0:
+        return _total_mastery_wins() >= mastery_goal
     return (required_level == 0 and price == 0) or (required_level > 0 and level >= required_level) or owned_banner_decorations.has(decoration_id)
 
 
@@ -782,7 +998,11 @@ func _choose_banner_decoration(decoration_id: String) -> void:
         var name: String = str(item["name"])
         var price: int = int(item.get("price", 0))
         var required_level: int = int(item.get("level_required", 0))
-        if _banner_decoration_owned(item):
+        if int(item.get("achievement_claims_required", 0)) > 0 and not _banner_decoration_owned(item):
+            banner_decoration_notice = "Claim more game achievements! " + _achievement_cosmetic_progress(item)
+        elif int(item.get("mastery_wins_required", 0)) > 0 and not _banner_decoration_owned(item):
+            banner_decoration_notice = "Keep winning games! " + _mastery_cosmetic_progress(item)
+        elif _banner_decoration_owned(item):
             equipped_banner_decoration = decoration_id
             banner_decoration_notice = "Equipped " + name + "."
         elif required_level > level:
@@ -823,6 +1043,12 @@ func _equip_banner(id: String) -> void:
 
 func _cosmetic_owned(kind: String, item: Dictionary) -> bool:
     var cosmetic_id: String = str(item["id"])
+    var mastery_goal: int = int(item.get("mastery_wins_required", 0))
+    var achievement_goal: int = int(item.get("achievement_claims_required", 0))
+    if achievement_goal > 0:
+        return game_achievement_claimed.size() >= achievement_goal
+    if mastery_goal > 0:
+        return _total_mastery_wins() >= mastery_goal
     if int(item.get("price", 0)) == 0 and int(item.get("level_required", 0)) == 0:
         return true
     if int(item.get("level_required", 0)) > 0 and level >= int(item["level_required"]):
@@ -838,7 +1064,11 @@ func _unlock_cosmetic_choice(kind: String, cosmetic_id: String) -> void:
         var item_name: String = str(item["name"])
         var required_level: int = int(item.get("level_required", 0))
         var price: int = int(item.get("price", 0))
-        if _cosmetic_owned(kind, item):
+        if int(item.get("achievement_claims_required", 0)) > 0 and not _cosmetic_owned(kind, item):
+            cosmetic_unlock_message = "Claim more game achievements! " + _achievement_cosmetic_progress(item)
+        elif int(item.get("mastery_wins_required", 0)) > 0 and not _cosmetic_owned(kind, item):
+            cosmetic_unlock_message = "Keep winning games! " + _mastery_cosmetic_progress(item)
+        elif _cosmetic_owned(kind, item):
             if kind == "background":
                 equipped_background = cosmetic_id
             else:
@@ -1583,6 +1813,118 @@ func _cosmetic_collection_section() -> void:
     _card("KEEP COLLECTING", "Visit Shop for themes, avatars, and victory effects. Open Profile to equip avatar frames and earn badges through gameplay.")
 
 
+func _progression_milestone_highlights() -> void:
+    var completed: Array[String] = []
+    var upcoming: Array[Dictionary] = []
+    var discovered: int = _discovered_game_count()
+    for target in [3, 5, 8, 10, 13]:
+        if discovered >= target:
+            completed.append("Explorer: %d games discovered" % target)
+        else:
+            upcoming.append({"label":"Discover %d games" % target, "current":discovered, "target":target, "remaining":target - discovered, "group":"exploration"})
+    var claimed: int = game_achievement_claimed.size()
+    for target in [10, 20, 35, 52]:
+        if claimed >= target:
+            completed.append("Achievement collector: %d rewards claimed" % target)
+        else:
+            upcoming.append({"label":"Claim %d game achievements" % target, "current":claimed, "target":target, "remaining":target - claimed, "group":"achievements"})
+    var total_wins: int = _total_mastery_wins()
+    for target in [15, 40, 80, 150]:
+        if total_wins >= target:
+            completed.append("Mastery: %d combined wins" % target)
+        else:
+            upcoming.append({"label":"Earn %d total wins" % target, "current":total_wins, "target":target, "remaining":target - total_wins, "group":"mastery"})
+    var diamond_games: int = 0
+    for game in GAMES:
+        var game_id: String = str(game["id"])
+        var wins: int = int(game_win_counts.get(game_id, 0))
+        if wins >= 50:
+            diamond_games += 1
+        else:
+            var next_target: int = 3
+            for tier in MASTERY_TIERS:
+                if wins < int(tier["wins"]):
+                    next_target = int(tier["wins"])
+                    break
+            upcoming.append({"label":"%s: %s mastery" % [str(game["title"]), _next_mastery_rank_label(wins)], "current":wins, "target":next_target, "remaining":next_target - wins, "group":"mastery"})
+    if diamond_games > 0:
+        completed.append("Diamond master in %d game(s)" % diamond_games)
+    upcoming.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+        var a_ratio: float = float(a["remaining"]) / float(maxi(1, int(a["target"])))
+        var b_ratio: float = float(b["remaining"]) / float(maxi(1, int(b["target"])))
+        if is_equal_approx(a_ratio, b_ratio):
+            return int(a["remaining"]) < int(b["remaining"])
+        return a_ratio < b_ratio
+    )
+    _heading("MILESTONE HIGHLIGHTS", "Your latest accomplishments and closest goals.")
+    if completed.is_empty():
+        _card("COMPLETED MILESTONES", "Your first milestone is waiting. Keep playing!")
+    else:
+        var recent: Array[String] = []
+        for i in range(maxi(0, completed.size() - 3), completed.size()):
+            recent.append("✓ " + completed[i])
+        _card("COMPLETED HIGHLIGHTS  •  %d TOTAL" % completed.size(), "\n".join(recent))
+    if upcoming.is_empty():
+        _card("UPCOMING MILESTONES", "All tracked milestones completed. Amazing work!")
+    else:
+        var shown: int = mini(3, upcoming.size())
+        for i in range(shown):
+            var goal: Dictionary = upcoming[i]
+            _card(str(goal["label"]).to_upper(), "%d / %d  •  %d remaining" % [int(goal["current"]), int(goal["target"]), int(goal["remaining"])])
+            _profile_progress("Milestone progress", int(goal["current"]), int(goal["target"]), Color("#66cfd5"))
+    content.add_child(_button("VIEW GAME MASTERY", game_mastery_page, PANEL2, 48))
+    content.add_child(_button("VIEW GAME ACHIEVEMENTS", game_achievements_page, PANEL2, 48))
+
+
+func _next_mastery_rank_label(wins: int) -> String:
+    for tier in MASTERY_TIERS:
+        if wins < int(tier["wins"]):
+            return str(tier["name"])
+    return "Diamond"
+
+
+func progression_overview() -> void:
+    current_tab = "profile"
+    _shell()
+    _heading("Progression Overview", "Your MiniVerse journey at a glance.")
+    _card("PLAYER LEVEL", "Level %d  •  %s  •  %d total XP" % [level, _player_rank_name(level), xp])
+    _profile_progress("Next level", _level_xp_progress(), _xp_to_next_level(level), Color("#9a85ff"))
+    var discovered: int = _discovered_game_count()
+    var total_plays: int = 0
+    for game in GAMES:
+        total_plays += int(game_play_counts.get(str(game["id"]), 0))
+    _card("GAME EXPLORATION", "%d / %d games discovered  •  %d rounds played" % [discovered, GAMES.size(), total_plays])
+    _profile_progress("Games discovered", discovered, GAMES.size(), Color("#38c6df"))
+    content.add_child(_button("VIEW GAME COLLECTION", game_collection_page, PANEL2, 50))
+    var mastery_count: int = 0
+    var diamond_count: int = 0
+    for game in GAMES:
+        var wins: int = int(game_win_counts.get(str(game["id"]), 0))
+        if wins >= 3:
+            mastery_count += 1
+        if wins >= 50:
+            diamond_count += 1
+    _card("GAME MASTERY", "%d total wins  •  %d Bronze+ games  •  %d Diamond games  •  %d rewards ready" % [_total_mastery_wins(), mastery_count, diamond_count, _mastery_claimable_count()])
+    _profile_progress("Games with Bronze mastery", mastery_count, GAMES.size(), Color("#d29a65"))
+    _profile_progress("Games with Diamond mastery", diamond_count, GAMES.size(), Color("#5dcdec"))
+    content.add_child(_button("VIEW GAME MASTERY", game_mastery_page, PANEL2, 50))
+    var achieved: int = 0
+    for game in GAMES:
+        var game_id: String = str(game["id"])
+        for achievement in GAME_ACHIEVEMENT_TIERS:
+            if _game_achievement_progress(game_id, achievement) >= int(achievement["target"]):
+                achieved += 1
+    var achievement_total: int = GAMES.size() * GAME_ACHIEVEMENT_TIERS.size()
+    _card("GAME ACHIEVEMENTS", "%d / %d completed  •  %d claimed  •  %d rewards ready" % [achieved, achievement_total, game_achievement_claimed.size(), _game_achievements_ready()])
+    _profile_progress("Challenges completed", achieved, achievement_total, Color("#f0c36b"))
+    _profile_progress("Rewards claimed", game_achievement_claimed.size(), achievement_total, Color("#7ce2aa"))
+    content.add_child(_button("VIEW GAME ACHIEVEMENTS", game_achievements_page, PANEL2, 50))
+    _progression_milestone_highlights()
+    _card("PLAYER MILESTONES", "Track your player level, badges and other long-term goals.")
+    content.add_child(_button("VIEW PLAYER MILESTONES", func(): _open_profile_section("milestones"), PANEL2, 50))
+    content.add_child(_button("BACK TO PROFILE PROGRESS", func(): _open_profile_section("progress"), PANEL2, 52))
+
+
 func player_profile() -> void:
     current_tab = "profile"
     _shell()
@@ -1669,6 +2011,7 @@ func player_profile() -> void:
         content.add_child(_button("VIEW COLLECTION & REWARDS", func(): _open_profile_section("collection"), _theme_color(), 54))
     if profile_section == "progress":
         _heading("Player Progress", "Your ranks, milestones, and game collection.")
+        content.add_child(_button("PROGRESSION OVERVIEW", progression_overview, _theme_color(), 56))
         content.add_child(_button("VIEW PLAYER MILESTONES", func(): _open_profile_section("milestones"), _theme_color(), 56))
         content.add_child(_button("VIEW GAME COLLECTION", func(): game_collection_page(), PANEL2, 56))
     if profile_section in ["frames", "collection", "badges", "titles", "banners", "decorations", "identity", "name_styles"]:
@@ -1727,9 +2070,11 @@ func player_profile() -> void:
             var decoration_id: String = str(decoration["id"])
             var decoration_name: String = str(decoration["name"])
             var decoration_owned: bool = _banner_decoration_owned(decoration)
-            var decoration_status: String = "EQUIPPED" if equipped_banner_decoration == decoration_id else ("OWNED" if decoration_owned else ("LEVEL %d" % int(decoration["level_required"]) if int(decoration.get("level_required", 0)) > 0 else "%d COINS" % int(decoration.get("price", 0))))
+            var decoration_status: String = "EQUIPPED" if equipped_banner_decoration == decoration_id else ("OWNED" if decoration_owned else ("MASTERY LOCKED" if int(decoration.get("mastery_wins_required", 0)) > 0 else _cosmetic_unlock_status(decoration)))
             _card(str(decoration.get("symbol", "")) + "  " + decoration_name.to_upper() + "  •  " + decoration_status, str(decoration["description"]))
-            if equipped_banner_decoration != decoration_id:
+            if int(decoration.get("mastery_wins_required", 0)) > 0 and not decoration_owned:
+                _card("MASTERY PROGRESS", _mastery_cosmetic_progress(decoration))
+            elif equipped_banner_decoration != decoration_id:
                 content.add_child(_button(("EQUIP " if decoration_owned else "UNLOCK ") + decoration_name.to_upper(), func(): _choose_banner_decoration(decoration_id), _theme_color(), 48))
         content.add_child(_button("VIEW ON HOME", home, PANEL2, 52))
     if profile_section == "showcase":
@@ -1772,10 +2117,12 @@ func player_profile() -> void:
             var banner_id: String = str(banner["id"])
             var banner_name: String = str(banner["name"])
             var owned: bool = _cosmetic_owned("banner", banner)
-            var status: String = "EQUIPPED" if equipped_banner == banner_id else ("OWNED" if owned else ("LEVEL %d" % int(banner["level_required"]) if int(banner.get("level_required", 0)) > 0 else "%d COINS" % int(banner.get("price", 0))))
+            var status: String = "EQUIPPED" if equipped_banner == banner_id else ("OWNED" if owned else ("MASTERY LOCKED" if int(banner.get("mastery_wins_required", 0)) > 0 else _cosmetic_unlock_status(banner)))
             _card(banner_name.to_upper() + "  •  " + status, str(banner["description"]))
             content.add_child(_profile_banner_preview(banner_id, false))
-            if equipped_banner != banner_id:
+            if int(banner.get("mastery_wins_required", 0)) > 0 and not owned:
+                _card("MASTERY PROGRESS", _mastery_cosmetic_progress(banner))
+            elif equipped_banner != banner_id:
                 content.add_child(_button(("EQUIP " if owned else "UNLOCK ") + banner_name.to_upper(), func(): _equip_banner(banner_id), Color(str(banner["color"])), 54))
     if profile_section == "frames":
         _heading("Avatar Frames", "Unlock decorative borders with coins. Frames are cosmetic only.")
@@ -2119,6 +2466,12 @@ func _game_card(g: Dictionary) -> PanelContainer:
     level_info.add_theme_font_size_override("font_size", 17)
     level_info.add_theme_color_override("font_color", Color("#ffe29e"))
     details.add_child(level_info)
+    var mastery_label := Label.new()
+    mastery_label.text = "MASTERY: %s  •  %d WINS" % [_mastery_tier_name(str(g.id)).to_upper(), int(game_win_counts.get(str(g.id), 0))]
+    mastery_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    mastery_label.add_theme_font_size_override("font_size", 15)
+    mastery_label.add_theme_color_override("font_color", Color("#a8e6d0"))
+    details.add_child(mastery_label)
     var stars := HBoxContainer.new()
     stars.add_theme_constant_override("separation", 5)
     details.add_child(stars)
@@ -2243,6 +2596,252 @@ func _collection_milestone_cards() -> void:
         _card("COLLECTION REWARDS", "All available milestone rewards have been claimed. Discover more games to unlock the rest.")
 
 
+func _mastery_tier_name(game_id: String) -> String:
+    var wins: int = int(game_win_counts.get(game_id, 0))
+    var tier_name: String = "Newcomer"
+    for tier in MASTERY_TIERS:
+        if wins >= int(tier["wins"]):
+            tier_name = str(tier["name"])
+    return tier_name
+
+
+func _mastery_claimable_count() -> int:
+    var count: int = 0
+    for game in GAMES:
+        var game_id: String = str(game["id"])
+        var wins: int = int(game_win_counts.get(game_id, 0))
+        for tier in MASTERY_TIERS:
+            var key: String = game_id + ":" + str(tier["wins"])
+            if wins >= int(tier["wins"]) and not bool(mastery_rewards_claimed.get(key, false)):
+                count += 1
+    return count
+
+
+func _claim_all_mastery_rewards() -> void:
+    var total: int = 0
+    var count: int = 0
+    for game in GAMES:
+        var game_id: String = str(game["id"])
+        var wins: int = int(game_win_counts.get(game_id, 0))
+        for tier in MASTERY_TIERS:
+            var key: String = game_id + ":" + str(tier["wins"])
+            if wins >= int(tier["wins"]) and not bool(mastery_rewards_claimed.get(key, false)):
+                mastery_rewards_claimed[key] = true
+                total += int(tier["coins"])
+                count += 1
+    if count > 0:
+        coins += total
+        mastery_notice = "Claimed %d mastery rewards: +%d coins!" % [count, total]
+    else:
+        mastery_notice = "No new mastery rewards are ready yet."
+    _save()
+    game_mastery_page()
+
+
+func _game_achievement_progress(game_id: String, achievement: Dictionary) -> int:
+    if str(achievement["type"]) == "plays":
+        return int(game_play_counts.get(game_id, 0))
+    return int(game_win_counts.get(game_id, 0))
+
+
+func _game_achievements_ready() -> int:
+    var ready: int = 0
+    for game in GAMES:
+        var game_id: String = str(game["id"])
+        for achievement in GAME_ACHIEVEMENT_TIERS:
+            var claim_key: String = game_id + ":" + str(achievement["id"])
+            if _game_achievement_progress(game_id, achievement) >= int(achievement["target"]) and not bool(game_achievement_claimed.get(claim_key, false)):
+                ready += 1
+    return ready
+
+
+func _claim_all_game_achievements() -> void:
+    var count: int = 0
+    var earned: int = 0
+    for game in GAMES:
+        var game_id: String = str(game["id"])
+        for achievement in GAME_ACHIEVEMENT_TIERS:
+            var claim_key: String = game_id + ":" + str(achievement["id"])
+            if _game_achievement_progress(game_id, achievement) >= int(achievement["target"]) and not bool(game_achievement_claimed.get(claim_key, false)):
+                game_achievement_claimed[claim_key] = true
+                count += 1
+                earned += int(achievement["coins"])
+    if count > 0:
+        coins += earned
+        game_achievement_notice = "Claimed %d achievements and earned %d coins!" % [count, earned]
+        if game_achievement_claimed.size() in [10, 20, 35, 52]:
+            game_achievement_notice += " A new showcase cosmetic is unlocked!"
+    else:
+        game_achievement_notice = "No unclaimed achievements yet."
+    _save()
+    game_achievements_page()
+
+
+func _achievement_game_name(game_id: String) -> String:
+    for game in GAMES:
+        if str(game["id"]) == game_id:
+            return str(game["title"])
+    return "Game"
+
+
+func _achievement_game_claimed(game_id: String) -> int:
+    var count: int = 0
+    for achievement in GAME_ACHIEVEMENT_TIERS:
+        if bool(game_achievement_claimed.get(game_id + ":" + str(achievement["id"]), false)):
+            count += 1
+    return count
+
+
+func _select_achievement_game(game_id: String) -> void:
+    achievement_selected_game = game_id
+    achievement_status_filter = "ALL"
+    game_achievements_page()
+
+
+func _set_achievement_status_filter(status: String) -> void:
+    achievement_status_filter = status
+    game_achievements_page()
+
+
+func game_achievements_page() -> void:
+    current_tab = "games"
+    _shell()
+    _heading("Game Achievements", "Choose a game to see its four challenges.")
+    var ready: int = _game_achievements_ready()
+    var total: int = GAMES.size() * GAME_ACHIEVEMENT_TIERS.size()
+    _card("ACHIEVEMENT COLLECTION", "%d / %d claimed  •  %d ready to collect" % [game_achievement_claimed.size(), total, ready])
+    if game_achievement_notice != "":
+        _card("LATEST REWARD", game_achievement_notice)
+    if ready > 0:
+        content.add_child(_button("CLAIM ALL ACHIEVEMENT REWARDS (%d)" % ready, _claim_all_game_achievements, Color("#fbbf24"), 56))
+    if achievement_selected_game == "":
+        _heading("Choose a Mini-Game", "See progress without scrolling through all 52 achievements.")
+        for game in GAMES:
+            var game_id: String = str(game["id"])
+            var claimed: int = _achievement_game_claimed(game_id)
+            var game_ready: int = 0
+            for achievement in GAME_ACHIEVEMENT_TIERS:
+                var claim_key: String = game_id + ":" + str(achievement["id"])
+                if _game_achievement_progress(game_id, achievement) >= int(achievement["target"]) and not bool(game_achievement_claimed.get(claim_key, false)):
+                    game_ready += 1
+            var suffix: String = "  •  %d READY" % game_ready if game_ready > 0 else ""
+            content.add_child(_button("%s  •  %d/4%s" % [str(game["title"]), claimed, suffix], func(): _select_achievement_game(game_id), _theme_color() if game_ready > 0 else PANEL2, 50))
+        _card("EXCLUSIVE COSMETICS", "Claim 10, 20, 35 and 52 game achievements to earn special banner cosmetics.")
+        content.add_child(_button("VIEW ACHIEVEMENT BANNERS", func(): _open_profile_section("banners"), PANEL2, 48))
+        content.add_child(_button("VIEW ACHIEVEMENT DECORATIONS", func(): _open_profile_section("decorations"), PANEL2, 48))
+        content.add_child(_button("BACK TO GAME LIBRARY", library, PANEL2, 52))
+        return
+
+    content.add_child(_button("BACK TO ALL GAMES", func(): _select_achievement_game(""), PANEL2, 52))
+    _heading(_achievement_game_name(achievement_selected_game), "%d of 4 achievements claimed" % _achievement_game_claimed(achievement_selected_game))
+    var filters := HFlowContainer.new()
+    filters.add_theme_constant_override("h_separation", 8)
+    filters.add_theme_constant_override("v_separation", 8)
+    content.add_child(filters)
+    for status in ["ALL", "READY", "IN PROGRESS", "CLAIMED"]:
+        var selected_status: String = status
+        var chip := _button(status, func(): _set_achievement_status_filter(selected_status), _theme_color() if achievement_status_filter == status else PANEL2, 42)
+        chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+        chip.add_theme_font_size_override("font_size", 15)
+        filters.add_child(chip)
+    var shown: int = 0
+    for achievement in GAME_ACHIEVEMENT_TIERS:
+        var claim_key: String = achievement_selected_game + ":" + str(achievement["id"])
+        var progress: int = _game_achievement_progress(achievement_selected_game, achievement)
+        var target: int = int(achievement["target"])
+        var claimed: bool = bool(game_achievement_claimed.get(claim_key, false))
+        var unlocked: bool = progress >= target
+        var status: String = "CLAIMED" if claimed else ("READY" if unlocked else "IN PROGRESS")
+        if achievement_status_filter != "ALL" and achievement_status_filter != status:
+            continue
+        shown += 1
+        _card(str(achievement["name"]).to_upper() + "  •  " + status, "%s  •  %d / %d  •  +%d coins" % [str(achievement["desc"]), mini(progress, target), target, int(achievement["coins"])])
+    if shown == 0:
+        _card("NOTHING HERE YET", "No achievements match this filter. Try All to see every challenge.")
+    content.add_child(_button("BACK TO ALL GAMES", func(): _select_achievement_game(""), PANEL2, 52))
+
+
+func _select_mastery_game(game_id: String) -> void:
+    mastery_selected_game = game_id
+    game_mastery_page()
+
+
+func _set_mastery_rank_filter(rank: String) -> void:
+    mastery_rank_filter = rank
+    game_mastery_page()
+
+
+func _mastery_game_ready(game_id: String) -> int:
+    var ready: int = 0
+    var wins: int = int(game_win_counts.get(game_id, 0))
+    for tier in MASTERY_TIERS:
+        var key: String = game_id + ":" + str(tier["wins"])
+        if wins >= int(tier["wins"]) and not bool(mastery_rewards_claimed.get(key, false)):
+            ready += 1
+    return ready
+
+
+func game_mastery_page() -> void:
+    current_tab = "games"
+    _shell()
+    _heading("Game Mastery", "Choose a mini-game to explore its mastery ranks.")
+    var ready: int = _mastery_claimable_count()
+    _card("MASTERY OVERVIEW", "%d rewards ready  •  %d total wins across %d games" % [ready, _total_mastery_wins(), GAMES.size()])
+    if mastery_notice != "":
+        _card("MASTERY UPDATE", mastery_notice)
+    if ready > 0:
+        content.add_child(_button("CLAIM ALL MASTERY REWARDS (%d)" % ready, _claim_all_mastery_rewards, Color("#fbbf24"), 56))
+    if mastery_selected_game == "":
+        content.add_child(_button("GAME ACHIEVEMENTS (%d READY)" % _game_achievements_ready(), game_achievements_page, PANEL2, 48))
+        _card("MASTERY COSMETICS", "%d total wins  •  Cosmetic milestones at 15, 40, 80 and 150 wins" % _total_mastery_wins())
+        content.add_child(_button("VIEW MASTERY BANNERS", func(): _open_profile_section("banners"), PANEL2, 48))
+        content.add_child(_button("VIEW MASTERY DECORATIONS", func(): _open_profile_section("decorations"), PANEL2, 48))
+        _heading("Filter by Rank", "Find games at a particular mastery level.")
+        var chips := HFlowContainer.new()
+        chips.add_theme_constant_override("h_separation", 8)
+        chips.add_theme_constant_override("v_separation", 8)
+        content.add_child(chips)
+        for rank in ["ALL", "NEWCOMER", "BRONZE", "SILVER", "GOLD", "DIAMOND"]:
+            var selected_rank: String = rank
+            var chip := _button(rank, func(): _set_mastery_rank_filter(selected_rank), _theme_color() if mastery_rank_filter == selected_rank else PANEL2, 44)
+            chip.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+            chip.add_theme_font_size_override("font_size", 16)
+            chips.add_child(chip)
+        var shown: int = 0
+        for game in GAMES:
+            var game_id: String = str(game["id"])
+            var rank_name: String = _mastery_tier_name(game_id)
+            if mastery_rank_filter != "ALL" and rank_name.to_upper() != mastery_rank_filter:
+                continue
+            shown += 1
+            var wins: int = int(game_win_counts.get(game_id, 0))
+            var game_ready: int = _mastery_game_ready(game_id)
+            var suffix: String = "  •  %d READY" % game_ready if game_ready > 0 else ""
+            content.add_child(_button("%s  •  %s  •  %d WINS%s" % [str(game["title"]), rank_name, wins, suffix], func(): _select_mastery_game(game_id), _theme_color() if game_ready > 0 else PANEL2, 52))
+        if shown == 0:
+            _card("NO MATCHING GAMES", "Try another mastery rank filter.")
+        content.add_child(_button("BACK TO GAME LIBRARY", library, PANEL2, 52))
+        return
+
+    var game_id: String = mastery_selected_game
+    var game_data: Dictionary = _game_data(game_id)
+    if game_data.is_empty():
+        mastery_selected_game = ""
+        game_mastery_page()
+        return
+    content.add_child(_button("BACK TO ALL GAMES", func(): _select_mastery_game(""), PANEL2, 52))
+    var wins: int = int(game_win_counts.get(game_id, 0))
+    _heading(str(game_data["title"]), "%d wins  •  Current rank: %s" % [wins, _mastery_tier_name(game_id)])
+    for tier in MASTERY_TIERS:
+        var goal: int = int(tier["wins"])
+        var key: String = game_id + ":" + str(goal)
+        var claimed: bool = bool(mastery_rewards_claimed.get(key, false))
+        var reached: bool = wins >= goal
+        var status: String = "CLAIMED" if claimed else ("READY TO CLAIM" if reached else "IN PROGRESS")
+        _card(str(tier["name"]).to_upper() + "  •  " + status, "%d / %d wins  •  +%d coins" % [mini(wins, goal), goal, int(tier["coins"])])
+    content.add_child(_button("BACK TO ALL GAMES", func(): _select_mastery_game(""), PANEL2, 52))
+
+
 func game_collection_page() -> void:
     current_tab = "games"
     _shell()
@@ -2263,6 +2862,8 @@ func library(restore_scroll: int = -1):
     var discovered: int = _discovered_game_count()
     content.add_child(_button("COLLECTION & REWARDS  (%d/%d DISCOVERED)" % [discovered, GAMES.size()], game_collection_page, _theme_color(), 58))
     content.add_child(_button("MY FAVORITE GAMES", favorite_games_page, Color("#344a76"), 52))
+    content.add_child(_button("GAME MASTERY  (%d REWARDS READY)" % _mastery_claimable_count(), game_mastery_page, Color("#344a76"), 52))
+    content.add_child(_button("GAME ACHIEVEMENTS  (%d READY)" % _game_achievements_ready(), game_achievements_page, Color("#344a76"), 52))
 
     var filters := HFlowContainer.new()
     filters.add_theme_constant_override("h_separation", 8)
@@ -3125,12 +3726,25 @@ func _weekly_reset_if_needed() -> void:
         weekly_notice = ""
 
 
+func _weekly_bonus_definition() -> Dictionary:
+    # A predictable rotation tied to the Monday start date; no server needed.
+    var monday_unix: float = Time.get_unix_time_from_datetime_string(weekly_key + "T12:00:00")
+    var rotation: int = posmod(int(monday_unix / 86400.0 / 7.0), 3)
+    if rotation == 0:
+        return {"id":"bonus_rounds", "title":"Bonus: Round Runner", "detail":"Finish 10 additional rounds this week.", "target":10, "coins":125, "xp":140}
+    if rotation == 1:
+        return {"id":"bonus_wins", "title":"Bonus: Winning Spirit", "detail":"Win 5 rounds this week.", "target":5, "coins":150, "xp":160}
+    return {"id":"bonus_variety", "title":"Bonus: Game Sampler", "detail":"Try 3 different mini-games this week.", "target":3, "coins":135, "xp":150}
+
+
 func _weekly_definitions() -> Array[Dictionary]:
-    return [
+    var challenges: Array[Dictionary] = [
         {"id":"rounds", "title":"Arcade Explorer", "detail":"Finish 15 mini-game rounds this week.", "target":15, "coins":180, "xp":200},
         {"id":"wins", "title":"Victory Marathon", "detail":"Successfully clear 8 levels this week.", "target":8, "coins":240, "xp":250},
         {"id":"variety", "title":"World Tour", "detail":"Finish a round in 5 different mini-games.", "target":5, "coins":300, "xp":300}
     ]
+    challenges.append(_weekly_bonus_definition())
+    return challenges
 
 
 func _weekly_record(id: String, passed: bool) -> void:
@@ -3142,6 +3756,13 @@ func _weekly_record(id: String, passed: bool) -> void:
     if not weekly_claimed.has("variety"):
         weekly_games[id] = true
         weekly_progress["variety"] = mini(weekly_games.size(), 5)
+    var bonus: Dictionary = _weekly_bonus_definition()
+    var bonus_id: String = str(bonus["id"])
+    if not weekly_claimed.has(bonus_id):
+        if bonus_id == "bonus_rounds" or (bonus_id == "bonus_wins" and passed):
+            weekly_progress[bonus_id] = mini(int(weekly_progress.get(bonus_id, 0)) + 1, int(bonus["target"]))
+        elif bonus_id == "bonus_variety":
+            weekly_progress[bonus_id] = mini(weekly_games.size(), int(bonus["target"]))
 
 
 func _weekly_claim(key: String) -> void:
@@ -3166,11 +3787,14 @@ func weekly_challenges() -> void:
     _weekly_reset_if_needed()
     current_tab = "rewards"
     _shell()
-    _heading("Weekly Challenges", "Three bigger goals to complete before the next Monday.")
+    _heading("Weekly Challenges", "Three core goals plus one rotating bonus each week.")
     var weekly_ready: int = _weekly_rewards_ready()
     if weekly_ready > 0:
         _card("READY TO CLAIM", "%d weekly reward%s available below." % [weekly_ready, "" if weekly_ready == 1 else "s"])
+    if weekly_ready > 0:
+        content.add_child(_button("CLAIM ALL READY CHALLENGES (%d)" % (_daily_rewards_ready() + weekly_ready - (1 if _login_can_claim() else 0)), _claim_all_challenge_rewards, Color("#34d399"), 54))
     _card("THIS WEEK", "Started Monday %s. Progress resets next Monday (device local time)." % weekly_key)
+    _card("ROTATING BONUS", "The fourth challenge changes every Monday. Finish it for extra coins and XP!")
     if weekly_notice != "":
         _card("REWARD CLAIMED", weekly_notice)
     for challenge in _weekly_definitions():
@@ -3203,6 +3827,9 @@ func _mission_reset_if_needed() -> void:
         mission_progress = {}
         mission_claimed = {}
         mission_notice = ""
+        daily_bonus_progress = 0
+        daily_bonus_claimed = false
+        daily_bonus_notice = ""
 
 
 func _mission_definitions() -> Array[Dictionary]:
@@ -3216,6 +3843,46 @@ func _mission_definitions() -> Array[Dictionary]:
         {"id":"focus", "title":"Spotlight: %s" % _game_name(focus_game), "detail":"Finish 2 rounds of %s." % _game_name(focus_game), "target":2, "coins":65, "xp":70, "game":focus_game},
         {"id":"win", "title":"Victory Quest: %s" % _game_name(other_game), "detail":"Successfully clear 1 level of %s." % _game_name(other_game), "target":1, "coins":85, "xp":90, "game":other_game}
     ]
+
+
+func _daily_bonus_definition() -> Dictionary:
+    var day_info: Dictionary = Time.get_datetime_dict_from_datetime_string(mission_day, false)
+    var day_number: int = int(day_info.get("year", 2026)) * 372 + int(day_info.get("month", 1)) * 31 + int(day_info.get("day", 1))
+    match day_number % 3:
+        0:
+            return {"title":"Bonus: Play More", "detail":"Finish 5 rounds in any mini-games.", "target":5, "type":"plays", "coins":70, "xp":65}
+        1:
+            return {"title":"Bonus: Winning Day", "detail":"Win 2 rounds in any mini-games.", "target":2, "type":"wins", "coins":85, "xp":80}
+        _:
+            return {"title":"Bonus: Game Explorer", "detail":"Finish 3 rounds in the featured bonus game.", "target":3, "type":"focus", "game":MISSION_GAMES[(day_number + 7) % MISSION_GAMES.size()], "coins":75, "xp":70}
+
+
+func _daily_bonus_record(id: String, passed: bool) -> void:
+    _mission_reset_if_needed()
+    if daily_bonus_claimed:
+        return
+    var bonus: Dictionary = _daily_bonus_definition()
+    var bonus_type: String = str(bonus["type"])
+    if bonus_type == "wins" and not passed:
+        return
+    if bonus_type == "focus" and id != str(bonus["game"]):
+        return
+    daily_bonus_progress = mini(daily_bonus_progress + 1, int(bonus["target"]))
+
+
+func _daily_bonus_claim() -> void:
+    _mission_reset_if_needed()
+    var bonus: Dictionary = _daily_bonus_definition()
+    if daily_bonus_claimed or daily_bonus_progress < int(bonus["target"]):
+        return
+    daily_bonus_claimed = true
+    coins += int(bonus["coins"])
+    xp += int(bonus["xp"])
+    level = _level_from_xp(xp)
+    daily_bonus_notice = "Bonus claimed: +%d coins and +%d XP!" % [int(bonus["coins"]), int(bonus["xp"])]
+    _play_sound(SFX_COLLECT)
+    _save()
+    daily_missions()
 
 
 func _mission_record(id: String, passed: bool) -> void:
@@ -3277,6 +3944,9 @@ func daily_missions() -> void:
     var daily_ready: int = _daily_rewards_ready()
     if daily_ready > 0:
         _card("REWARDS WAITING", "%d daily reward%s ready to claim, including today's login reward if available." % [daily_ready, "" if daily_ready == 1 else "s"])
+    var claimable_challenges: int = daily_ready + _weekly_rewards_ready() - (1 if _login_can_claim() else 0)
+    if claimable_challenges > 0:
+        content.add_child(_button("CLAIM ALL READY CHALLENGES (%d)" % claimable_challenges, _claim_all_challenge_rewards, Color("#34d399"), 54))
     content.add_child(_menu_button("VIEW DAILY LOGIN REWARDS", _login_rewards_page, Color("#fbbf24"), "missions"))
     _heading("Today's Missions", "Claim all three missions today to build your challenge streak.")
     var streak_display: int = challenge_streak
@@ -3304,6 +3974,21 @@ func daily_missions() -> void:
         elif not claimed and mission.has("game"):
             var game_id_to_play: String = str(mission["game"])
             content.add_child(_button("PLAY %s" % _game_name(game_id_to_play), func(): launch(game_id_to_play), Color("#344a9b"), 48))
+    _heading("Rotating Daily Bonus", "One extra objective each day. This does not affect your three-mission streak.")
+    var bonus: Dictionary = _daily_bonus_definition()
+    var bonus_target: int = int(bonus["target"])
+    var bonus_status: String = "CLAIMED" if daily_bonus_claimed else ("READY TO CLAIM" if daily_bonus_progress >= bonus_target else "%d / %d" % [daily_bonus_progress, bonus_target])
+    var bonus_detail: String = str(bonus["detail"])
+    if str(bonus["type"]) == "focus":
+        bonus_detail = "Finish 3 rounds of %s." % _game_name(str(bonus["game"]))
+    _card(str(bonus["title"]), "%s\nProgress: %s\nReward: %d coins + %d XP" % [bonus_detail, bonus_status, int(bonus["coins"]), int(bonus["xp"])])
+    if daily_bonus_notice != "":
+        _card("BONUS REWARD", daily_bonus_notice)
+    if not daily_bonus_claimed and daily_bonus_progress >= bonus_target:
+        content.add_child(_button("CLAIM DAILY BONUS", _daily_bonus_claim, Color("#36e58a"), 52))
+    elif not daily_bonus_claimed and str(bonus["type"]) == "focus":
+        var bonus_game: String = str(bonus["game"])
+        content.add_child(_button("PLAY BONUS GAME", func(): launch(bonus_game), Color("#344a9b"), 48))
     content.add_child(_menu_button("BACK TO HOME", home, PANEL2, "back"))
 
 
@@ -3421,8 +4106,16 @@ func _finished(id: String, score: int, extra: Dictionary = {}):
         total_wins += 1
         game_win_counts[id] = int(game_win_counts.get(id, 0)) + 1
     _award_achievements()
+    var ready_before: int = _daily_rewards_ready() + _weekly_rewards_ready() - (1 if _login_can_claim() else 0)
     _mission_record(id, passed)
+    _daily_bonus_record(id, passed)
     _weekly_record(id, passed)
+    var ready_after: int = _daily_rewards_ready() + _weekly_rewards_ready() - (1 if _login_can_claim() else 0)
+    if ready_after > ready_before:
+        var newly_ready: int = ready_after - ready_before
+        challenge_ready_notice = "%d new challenge reward%s ready! Collect them in Earn." % [newly_ready, "" if newly_ready == 1 else "s"]
+    else:
+        challenge_ready_notice = ""
     if daily_feature_active:
         var feature: Dictionary = _daily_feature()
         if id == daily_feature_game and daily_feature_day == str(feature["date"]):
@@ -3466,6 +4159,33 @@ func _play_completed_rhythm_song(played_level: int) -> void:
 func _results(id: String, score: int, reward: int, record: bool, earned_xp: int, stars_earned: int, played_level: int, goal: int, passed: bool):
     _shell()
     _heading("Level Complete!" if passed else "Try Again!", "Level %d • %s" % [played_level, "Goal reached!" if passed else "You can retry this level."])
+    var mastery_wins: int = int(game_win_counts.get(id, 0))
+    for tier in MASTERY_TIERS:
+        if passed and mastery_wins == int(tier["wins"]):
+            _card("NEW MASTERY RANK!", "%s reached %s mastery! Visit Games → Game Mastery to claim your reward." % [_game_name(id), str(tier["name"])])
+            break
+    if challenge_ready_notice != "":
+        # One compact, visually distinct alert, shown once after the round.
+        var reward_alert := PanelContainer.new()
+        reward_alert.add_theme_stylebox_override("panel", _style(Color("#164d48"), 18))
+        content.add_child(reward_alert)
+        var alert_column := VBoxContainer.new()
+        alert_column.add_theme_constant_override("separation", 7)
+        reward_alert.add_child(alert_column)
+        var alert_heading := Label.new()
+        alert_heading.text = "★  CHALLENGE REWARD READY!"
+        alert_heading.add_theme_font_size_override("font_size", 22)
+        alert_heading.add_theme_color_override("font_color", Color("#a7f3d0"))
+        alert_heading.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        alert_column.add_child(alert_heading)
+        var alert_message := Label.new()
+        alert_message.text = challenge_ready_notice
+        alert_message.add_theme_font_size_override("font_size", 18)
+        alert_message.add_theme_color_override("font_color", Color("#e4fff4"))
+        alert_message.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+        alert_column.add_child(alert_message)
+        alert_column.add_child(_button("COLLECT REWARDS", _rewards_hub, Color("#34d399"), 52))
+        challenge_ready_notice = ""
     if discovery_notice != "":
         _card("FIRST PLAY BONUS!", discovery_notice)
         discovery_notice = ""
@@ -3650,7 +4370,7 @@ func _save():
     _grant_milestone_cosmetics()
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"xp_curve_version":2,"last_rewarded_level":last_rewarded_level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"favorite_games":favorite_games,"discovery_rewards_claimed":discovery_rewards_claimed,"collection_milestones_claimed":collection_milestones_claimed,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"show_background_glow":show_background_glow,"compact_menus":compact_menus,"show_header_tagline":show_header_tagline,"equipped_background":equipped_background,"equipped_banner":equipped_banner,"equipped_banner_decoration":equipped_banner_decoration,"custom_player_name":custom_player_name,"custom_player_motto":custom_player_motto,"equipped_name_style":equipped_name_style,"showcased_badge":showcased_badge,"showcased_game":showcased_game,"owned_name_styles":owned_name_styles,"owned_banner_decorations":owned_banner_decorations,"banner_animation_enabled":banner_animation_enabled,"owned_backgrounds":owned_backgrounds,"owned_banners":owned_banners,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_avatar_frames":owned_avatar_frames,"equipped_avatar_frame":equipped_avatar_frame,"equipped_profile_badge":equipped_profile_badge,"cosmetic_rewards_claimed":cosmetic_rewards_claimed,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day,"daily_feature_reward_day":daily_feature_reward_day,"daily_feature_history":daily_feature_history}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"xp_curve_version":2,"last_rewarded_level":last_rewarded_level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"favorite_games":favorite_games,"discovery_rewards_claimed":discovery_rewards_claimed,"collection_milestones_claimed":collection_milestones_claimed,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"show_background_glow":show_background_glow,"compact_menus":compact_menus,"show_header_tagline":show_header_tagline,"equipped_background":equipped_background,"equipped_banner":equipped_banner,"equipped_banner_decoration":equipped_banner_decoration,"custom_player_name":custom_player_name,"custom_player_motto":custom_player_motto,"equipped_name_style":equipped_name_style,"showcased_badge":showcased_badge,"showcased_game":showcased_game,"owned_name_styles":owned_name_styles,"owned_banner_decorations":owned_banner_decorations,"banner_animation_enabled":banner_animation_enabled,"owned_backgrounds":owned_backgrounds,"owned_banners":owned_banners,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"mastery_rewards_claimed":mastery_rewards_claimed,"game_achievement_claimed":game_achievement_claimed,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_avatar_frames":owned_avatar_frames,"equipped_avatar_frame":equipped_avatar_frame,"equipped_profile_badge":equipped_profile_badge,"cosmetic_rewards_claimed":cosmetic_rewards_claimed,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"daily_bonus_progress":daily_bonus_progress,"daily_bonus_claimed":daily_bonus_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day,"daily_feature_reward_day":daily_feature_reward_day,"daily_feature_history":daily_feature_history}))
         f.close()
 
 func _load_save():
@@ -3678,6 +4398,8 @@ func _load_save():
         mission_day = str(data.get("mission_day", ""))
         mission_progress = data.get("mission_progress", {})
         mission_claimed = data.get("mission_claimed", {})
+        daily_bonus_progress = int(data.get("daily_bonus_progress", 0))
+        daily_bonus_claimed = bool(data.get("daily_bonus_claimed", false))
         _mission_reset_if_needed()
         sound_enabled = bool(data.get("sound_enabled", true))
         show_background_glow = bool(data.get("show_background_glow", true))
@@ -3711,7 +4433,7 @@ func _load_save():
         owned_banner_decorations = data.get("owned_banner_decorations", {})
         if typeof(owned_banner_decorations) != TYPE_DICTIONARY:
             owned_banner_decorations = {}
-        if not ["none", "sparkles", "hearts", "crown", "diamonds", "stars", "laurel"].has(equipped_banner_decoration):
+        if not ["none", "sparkles", "hearts", "crown", "diamonds", "stars", "laurel", "master_flame", "master_gem"].has(equipped_banner_decoration):
             equipped_banner_decoration = "sparkles"
         banner_animation_enabled = bool(data.get("banner_animation_enabled", true))
         owned_backgrounds = data.get("owned_backgrounds", {})
@@ -3722,7 +4444,7 @@ func _load_save():
             owned_banners = {}
         if not ["midnight", "nebula", "ocean", "forest", "sunset", "galaxy", "lava", "ice", "gold"].has(equipped_background):
             equipped_background = "midnight"
-        if not ["starlight", "aurora", "royal", "ember", "prism", "champion", "explorer", "legend"].has(equipped_banner):
+        if not ["starlight", "aurora", "royal", "ember", "prism", "champion", "explorer", "legend", "bronze_master", "diamond_master"].has(equipped_banner):
             equipped_banner = "starlight"
         coins = int(data.get("coins",0))
         xp = int(data.get("xp",0))
@@ -3744,6 +4466,12 @@ func _load_save():
         total_wins = int(data.get("total_wins", 0))
         game_play_counts = data.get("game_play_counts", {})
         game_win_counts = data.get("game_win_counts", {})
+        mastery_rewards_claimed = data.get("mastery_rewards_claimed", {})
+        game_achievement_claimed = data.get("game_achievement_claimed", {})
+        if typeof(game_achievement_claimed) != TYPE_DICTIONARY:
+            game_achievement_claimed = {}
+        if typeof(mastery_rewards_claimed) != TYPE_DICTIONARY:
+            mastery_rewards_claimed = {}
         # Existing players already tried these games before this feature
         # existed; don't award retroactive first-play bonuses.
         collection_milestones_claimed = data.get("collection_milestones_claimed", {})
