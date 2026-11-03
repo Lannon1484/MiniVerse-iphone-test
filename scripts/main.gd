@@ -71,6 +71,13 @@ var level := 1
 var last_rewarded_level := 1
 var level_up_notice := ""
 var best_scores: Dictionary = {}
+# Per-level records complement the existing all-time best and mastery.
+# Keys are game IDs, values are dictionaries keyed by level number.
+var level_records: Dictionary = {}
+var level_rounds: Dictionary = {}
+var level_wins: Dictionary = {}
+var replay_milestones_claimed: Dictionary = {}
+var replay_notice := ""
 var best_stars: Dictionary = {}
 var recent_games: Array[String] = []
 var game_id := ""
@@ -2574,7 +2581,9 @@ func _compact_game_card(g: Dictionary) -> PanelContainer:
     title_label.add_theme_color_override("font_color", TEXT)
     text_col.add_child(title_label)
     var sub := Label.new()
-    sub.text = "%s  •  LEVEL %d  •  BEST %d" % [str(g.genre), Difficulty.level(game_id), int(best_scores.get(game_id, 0))]
+    var current_level: int = Difficulty.level(game_id)
+    var current_best: int = int(_level_stat(level_records, game_id, str(current_level)))
+    sub.text = "%s  •  LV %d BEST %d  •  ALL-TIME %d" % [str(g.genre), current_level, current_best, int(best_scores.get(game_id, 0))]
     sub.add_theme_font_size_override("font_size", 14)
     sub.add_theme_color_override("font_color", Color("#ffe29e"))
     sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -3053,6 +3062,85 @@ func game_collection_page() -> void:
     content.add_child(_button("BACK TO GAME LIBRARY", library, _theme_color(), 56))
 
 
+func _level_stat(source: Dictionary, id: String, level_key: String) -> int:
+    var per_game: Dictionary = source.get(id, {})
+    return int(per_game.get(level_key, 0))
+
+
+func _set_level_stat(source: Dictionary, id: String, level_key: String, value: int) -> void:
+    var per_game: Dictionary = source.get(id, {})
+    per_game[level_key] = value
+    source[id] = per_game
+
+
+func _increase_level_stat(source: Dictionary, id: String, level_key: String) -> void:
+    _set_level_stat(source, id, level_key, _level_stat(source, id, level_key) + 1)
+
+
+# Presentation-only milestone feedback; rewards are still granted and saved
+# by _finished(), so animations can never duplicate a payout.
+func _milestone_celebration(message: String) -> void:
+    var panel: PanelContainer = _card("✦  MILESTONE UNLOCKED!  ✦", message)
+    var panel_style := _lobby_card_style(Color("#ffcf66"))
+    panel.add_theme_stylebox_override("panel", panel_style)
+    panel.modulate.a = 0.0
+    panel.scale = Vector2(0.97, 0.97)
+    panel.pivot_offset = Vector2(140, 35)
+    var tween: Tween = create_tween()
+    tween.set_parallel(true)
+    tween.tween_property(panel, "modulate:a", 1.0, 0.5).set_trans(Tween.TRANS_SINE)
+    tween.tween_property(panel, "scale", Vector2.ONE, 0.5).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func _replay_progress_widget(id: String, rounds: int) -> void:
+    var next_target: int = 0
+    var previous_target: int = 0
+    for milestone in [5, 15, 30, 60]:
+        if rounds < milestone:
+            next_target = milestone
+            break
+        previous_target = milestone
+    if next_target == 0:
+        _card("✦ REPLAY MASTERED", "All four replay milestones unlocked for %s!" % _game_name(id))
+        return
+    var progress: int = maxi(0, rounds - previous_target)
+    var needed: int = next_target - previous_target
+    _profile_progress("%s • NEXT BONUS: +%d COINS" % [_game_name(id), next_target * 3], progress, needed, Color("#f6c765"))
+    var hint := Label.new()
+    hint.text = "%d more completed round%s to unlock" % [next_target - rounds, "" if next_target - rounds == 1 else "s"]
+    hint.add_theme_color_override("font_color", Color("#d9c5ff"))
+    hint.add_theme_font_size_override("font_size", 15)
+    content.add_child(hint)
+
+
+func level_records_page() -> void:
+    current_tab = "games"
+    _shell()
+    _heading("Level Records", "Your best score and clears on every level you have played.")
+    _card("REPLAY REWARDS", "Every game grants one-time coin bonuses at 5, 15, 30, and 60 completed rounds. Keep playing your favorites!")
+    for g in GAMES:
+        var id: String = str(g["id"])
+        var rounds: int = int(game_play_counts.get(id, 0))
+        var next_goal: int = 0
+        for threshold in [5, 15, 30, 60]:
+            if rounds < threshold:
+                next_goal = threshold
+                break
+        var progress: String = "%d / %d rounds until next bonus" % [rounds, next_goal] if next_goal > 0 else "All replay milestones reached!"
+        var details: Array[String] = []
+        var per_game: Dictionary = level_rounds.get(id, {})
+        var level_keys: Array = per_game.keys()
+        level_keys.sort_custom(func(a, b): return int(a) < int(b))
+        for level_key in level_keys:
+            var attempts: int = int(per_game[level_key])
+            var clears: int = _level_stat(level_wins, id, str(level_key))
+            var best: int = _level_stat(level_records, id, str(level_key))
+            details.append("Level %s: best %d • %d clears / %d attempts" % [str(level_key), best, clears, attempts])
+        _card(str(g["title"]), progress + ("\\n" + "\\n".join(details) if not details.is_empty() else "\\nNo recorded levels yet."))
+        _replay_progress_widget(id, rounds)
+    content.add_child(_button("BACK TO GAME LIBRARY", library, _theme_color(), 52))
+
+
 func library(restore_scroll: int = -1):
     current_tab = "games"
     _shell()
@@ -3088,6 +3176,7 @@ func library(restore_scroll: int = -1):
 
     # Collection features are still available, but no longer block game discovery.
     _heading("YOUR COLLECTION", "Rewards, mastery and achievements")
+    content.add_child(_button("LEVEL RECORDS & REPLAY MILESTONES", level_records_page, _theme_color(), 48))
     var discovered: int = _discovered_game_count()
     content.add_child(_button("COLLECTION & REWARDS  (%d/%d)" % [discovered, GAMES.size()], game_collection_page, _theme_color(), 48))
     content.add_child(_button("MY FAVORITE GAMES", favorite_games_page, Color("#344a76"), 46))
@@ -4333,6 +4422,9 @@ func _level_goal(id: String, played_level: int) -> int:
 func _finished(id: String, score: int, extra: Dictionary = {}):
     var previous_best: int = int(best_scores.get(id, 0))
     var played_level: int = Difficulty.level(id)
+    var record_key: String = str(played_level)
+    var previous_level_best: int = int(_level_stat(level_records, id, record_key))
+    _increase_level_stat(level_rounds, id, record_key)
     var goal: int = _level_goal(id, played_level)
     var puzzle_completion: bool = id in ["memory", "sort", "dots", "slide"]
     # Puzzle games signal completion directly. Respect an explicit result
@@ -4357,6 +4449,19 @@ func _finished(id: String, score: int, extra: Dictionary = {}):
             stars_earned = 3 if score >= int(ceil(float(goal) * 1.6)) else 2
         Difficulty.complete(id)
     var record: bool = score > previous_best
+    if score > previous_level_best:
+        _set_level_stat(level_records, id, record_key, score)
+    if passed:
+        _increase_level_stat(level_wins, id, record_key)
+    replay_notice = ""
+    var plays: int = int(game_play_counts.get(id, 0)) + 1
+    for milestone in [5, 15, 30, 60]:
+        var milestone_key: String = id + ":" + str(milestone)
+        if plays >= milestone and not bool(replay_milestones_claimed.get(milestone_key, false)):
+            replay_milestones_claimed[milestone_key] = true
+            var bonus: int = milestone * 3
+            coins += bonus
+            replay_notice = "REPLAY MILESTONE! %d rounds of %s • +%d coins" % [milestone, _game_name(id), bonus]
     best_stars[id] = maxi(int(best_stars.get(id, 0)), stars_earned)
     if record:
         best_scores[id] = score
@@ -4428,6 +4533,15 @@ func _play_completed_rhythm_song(played_level: int) -> void:
 func _results(id: String, score: int, reward: int, record: bool, earned_xp: int, stars_earned: int, played_level: int, goal: int, passed: bool):
     _shell()
     _heading("Level Complete!" if passed else "Try Again!", "Level %d • %s" % [played_level, "Goal reached!" if passed else "You can retry this level."])
+    var level_key: String = str(played_level)
+    var level_best: int = int(_level_stat(level_records, id, level_key))
+    var level_attempts: int = int(_level_stat(level_rounds, id, level_key))
+    var level_clears: int = int(_level_stat(level_wins, id, level_key))
+    _card("LEVEL %d RECORD" % played_level, "Best: %d  •  Attempts: %d  •  Clears: %d" % [level_best, level_attempts, level_clears])
+    if replay_notice != "":
+        _milestone_celebration(replay_notice)
+    var rounds_played: int = int(game_play_counts.get(id, 0))
+    _replay_progress_widget(id, rounds_played)
     # Show the actual mini-game's fantasy art on its results screen.
     # Reuse the same image used in the library and gameplay header.
     var result_art_panel := PanelContainer.new()
@@ -4667,7 +4781,7 @@ func _save():
     _grant_milestone_cosmetics()
     var f := FileAccess.open(SAVE_PATH, FileAccess.WRITE)
     if f:
-        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"xp_curve_version":2,"last_rewarded_level":last_rewarded_level,"best_scores":best_scores,"best_stars":best_stars,"recent_games":recent_games,"favorite_games":favorite_games,"discovery_rewards_claimed":discovery_rewards_claimed,"collection_milestones_claimed":collection_milestones_claimed,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"show_background_glow":show_background_glow,"compact_menus":compact_menus,"show_header_tagline":show_header_tagline,"equipped_background":equipped_background,"equipped_banner":equipped_banner,"equipped_banner_decoration":equipped_banner_decoration,"custom_player_name":custom_player_name,"custom_player_motto":custom_player_motto,"equipped_name_style":equipped_name_style,"showcased_badge":showcased_badge,"showcased_game":showcased_game,"owned_name_styles":owned_name_styles,"owned_banner_decorations":owned_banner_decorations,"banner_animation_enabled":banner_animation_enabled,"owned_backgrounds":owned_backgrounds,"owned_banners":owned_banners,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"mastery_rewards_claimed":mastery_rewards_claimed,"game_achievement_claimed":game_achievement_claimed,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_avatar_frames":owned_avatar_frames,"equipped_avatar_frame":equipped_avatar_frame,"equipped_profile_badge":equipped_profile_badge,"cosmetic_rewards_claimed":cosmetic_rewards_claimed,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"daily_bonus_progress":daily_bonus_progress,"daily_bonus_claimed":daily_bonus_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day,"daily_feature_reward_day":daily_feature_reward_day,"daily_feature_history":daily_feature_history}))
+        f.store_string(JSON.stringify({"coins":coins,"xp":xp,"level":level,"xp_curve_version":2,"last_rewarded_level":last_rewarded_level,"best_scores":best_scores,"best_stars":best_stars,"level_records":level_records,"level_rounds":level_rounds,"level_wins":level_wins,"replay_milestones_claimed":replay_milestones_claimed,"recent_games":recent_games,"favorite_games":favorite_games,"discovery_rewards_claimed":discovery_rewards_claimed,"collection_milestones_claimed":collection_milestones_claimed,"seen_tutorials":seen_tutorials,"sound_enabled":sound_enabled,"show_background_glow":show_background_glow,"compact_menus":compact_menus,"show_header_tagline":show_header_tagline,"equipped_background":equipped_background,"equipped_banner":equipped_banner,"equipped_banner_decoration":equipped_banner_decoration,"custom_player_name":custom_player_name,"custom_player_motto":custom_player_motto,"equipped_name_style":equipped_name_style,"showcased_badge":showcased_badge,"showcased_game":showcased_game,"owned_name_styles":owned_name_styles,"owned_banner_decorations":owned_banner_decorations,"banner_animation_enabled":banner_animation_enabled,"owned_backgrounds":owned_backgrounds,"owned_banners":owned_banners,"achievement_claimed":achievement_claimed,"total_games_played":total_games_played,"total_wins":total_wins,"game_play_counts":game_play_counts,"game_win_counts":game_win_counts,"mastery_rewards_claimed":mastery_rewards_claimed,"game_achievement_claimed":game_achievement_claimed,"owned_themes":owned_themes,"equipped_theme":equipped_theme,"owned_avatars":owned_avatars,"equipped_avatar":equipped_avatar,"owned_avatar_frames":owned_avatar_frames,"equipped_avatar_frame":equipped_avatar_frame,"equipped_profile_badge":equipped_profile_badge,"cosmetic_rewards_claimed":cosmetic_rewards_claimed,"owned_effects":owned_effects,"equipped_effect":equipped_effect,"mission_day":mission_day,"mission_progress":mission_progress,"mission_claimed":mission_claimed,"daily_bonus_progress":daily_bonus_progress,"daily_bonus_claimed":daily_bonus_claimed,"login_last_claim":login_last_claim,"login_streak":login_streak,"login_total_claims":login_total_claims,"equipped_title":equipped_title,"weekly_key":weekly_key,"weekly_progress":weekly_progress,"weekly_claimed":weekly_claimed,"weekly_games":weekly_games,"challenge_streak":challenge_streak,"challenge_streak_last_day":challenge_streak_last_day,"daily_feature_reward_day":daily_feature_reward_day,"daily_feature_history":daily_feature_history}))
         f.close()
 
 func _load_save():
@@ -4677,6 +4791,18 @@ func _load_save():
     var data = JSON.parse_string(f.get_as_text())
     f.close()
     if typeof(data) == TYPE_DICTIONARY:
+        level_records = data.get("level_records", {})
+        level_rounds = data.get("level_rounds", {})
+        level_wins = data.get("level_wins", {})
+        replay_milestones_claimed = data.get("replay_milestones_claimed", {})
+        if typeof(level_records) != TYPE_DICTIONARY:
+            level_records = {}
+        if typeof(level_rounds) != TYPE_DICTIONARY:
+            level_rounds = {}
+        if typeof(level_wins) != TYPE_DICTIONARY:
+            level_wins = {}
+        if typeof(replay_milestones_claimed) != TYPE_DICTIONARY:
+            replay_milestones_claimed = {}
         daily_feature_reward_day = str(data.get("daily_feature_reward_day", ""))
         daily_feature_history = data.get("daily_feature_history", {})
         if typeof(daily_feature_history) != TYPE_DICTIONARY:

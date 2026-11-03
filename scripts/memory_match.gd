@@ -130,18 +130,20 @@ func _new_round() -> void:
         grid.add_child(button); buttons.append(button)
     _refresh_stats()
     status_label.text = "Level %d • Find %d pairs!" % [difficulty_level, pair_count]
-    if difficulty_level <= 3:
-        lock_board = true
-        status_label.text = "Memorize the pictures!"
-        for i in range(buttons.size()):
-            buttons[i].icon = PICTURES[cards[i]]
-        await get_tree().create_timer(5.0 if difficulty_level == 1 else (4.0 if difficulty_level == 2 else 2.75)).timeout
-        if not is_inside_tree() or this_round != round_serial:
-            return
-        for i in range(buttons.size()):
-            buttons[i].icon = CARD_BACK
-        lock_board = false
-        status_label.text = "Level %d • Find the matching pictures!" % difficulty_level
+    # Every level includes a memorization preview. Later levels shorten
+    # the preview gradually, but never remove it altogether.
+    lock_board = true
+    var preview_seconds: float = maxf(2.5, 5.0 - 0.35 * float(difficulty_level - 1))
+    status_label.text = "Level %d • Memorize the pictures! (%.1f seconds)" % [difficulty_level, preview_seconds]
+    for i in range(buttons.size()):
+        buttons[i].icon = PICTURES[cards[i]]
+    await get_tree().create_timer(preview_seconds).timeout
+    if not is_inside_tree() or this_round != round_serial:
+        return
+    for i in range(buttons.size()):
+        buttons[i].icon = CARD_BACK
+    lock_board = false
+    status_label.text = "Level %d • Find the matching pictures!" % difficulty_level
 
 func _card_style(color: Color) -> StyleBoxFlat:
     var style := StyleBoxFlat.new()

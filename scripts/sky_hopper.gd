@@ -76,6 +76,11 @@ func start_game() -> void:
     restart.custom_minimum_size.y = 52
     restart.pressed.connect(_restart)
     layout.add_child(restart)
+    var finish_button := Button.new()
+    finish_button.text = "FINISH RUN & CLAIM SCORE"
+    finish_button.custom_minimum_size.y = 46
+    finish_button.pressed.connect(_finish_run)
+    layout.add_child(finish_button)
     _restart()
 
 func _restart() -> void:
@@ -84,11 +89,18 @@ func _restart() -> void:
     velocity = Vector2(0, JUMP)
     platforms = [Vector2(180, 495)]
     stars.clear()
+    var previous_x: float = 180.0
+    var previous_y: float = 495.0
     for i in range(1, 30):
         var spacing: float = _platform_spacing()
-        var y: float = 495.0 - i * spacing
-        var x: float = rng.randf_range(110.0 - minf(40.0, float(difficulty_level - 1) * 3.0), 250.0 + minf(40.0, float(difficulty_level - 1) * 3.0))
+        var y: float = previous_y - spacing
+        # Early jumps are centered and forgiving. Later islands move
+        # gradually so no random impossible horizontal leap is generated.
+        var drift: float = 0.0 if i <= 2 else rng.randf_range(-70.0, 70.0)
+        var x: float = clampf(previous_x + drift, 75.0, 285.0)
         platforms.append(Vector2(x, y))
+        previous_x = x
+        previous_y = y
         if i % 2 == 0:
             stars.append(Vector2(x, y - 49))
     camera_y = 0.0
@@ -158,6 +170,7 @@ func _physics_process(delta: float) -> void:
     score = maxi(score, int((440.0 - highest) / 6.0))
     if player.y - camera_y > HEIGHT + 60:
         _game_over()
+        return
     # Extend the sky indefinitely as the player climbs.
     if platforms.back().y > camera_y - 250.0:
         for i in range(12):
@@ -181,7 +194,16 @@ func _game_over() -> void:
         return
     running = false
     finished_once = true
-    message.text = "Great climb! Tap NEW RUN to try again."
+    message.text = "You fell! Tap NEW RUN to retry, or FINISH RUN to claim your score."
+    _refresh()
+
+func _finish_run() -> void:
+    # Only an explicit finish action leaves Sky Hopper. A missed platform
+    # must never unexpectedly send the player to the lobby/results.
+    if finished_once and running:
+        return
+    running = false
+    finished_once = true
     finished.emit("hopper", score, {"coins": maxi(5, int(score / 80.0)), "xp": 35})
 
 class HopperArena extends Control:
